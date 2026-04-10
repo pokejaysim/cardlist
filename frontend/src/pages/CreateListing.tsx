@@ -36,10 +36,6 @@ interface CardDetails {
 }
 
 const CONDITIONS = ["NM", "LP", "MP", "HP", "DMG"] as const;
-const CARD_GAMES = [
-  { key: "pokemon", label: "Pokemon" },
-] as const;
-
 const STEPS: { key: Step; label: string }[] = [
   { key: "photos", label: "Photos" },
   { key: "identify", label: "Identify" },
