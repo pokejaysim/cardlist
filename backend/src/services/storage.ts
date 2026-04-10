@@ -14,7 +14,7 @@ export async function uploadPhoto(
     cloudinary.uploader
       .upload_stream(
         {
-          folder: `cardlist/${folder}`,
+          folder: `snapcard/${folder}`,
           resource_type: "image",
           format: "jpg",
           transformation: [{ quality: "auto", fetch_format: "auto" }],

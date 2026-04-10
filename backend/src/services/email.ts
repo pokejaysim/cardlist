@@ -1,7 +1,7 @@
 import sgMail from "@sendgrid/mail";
 
 const apiKey = process.env.SENDGRID_API_KEY;
-const fromEmail = process.env.SENDGRID_FROM_EMAIL ?? "noreply@cardlist.app";
+const fromEmail = process.env.SENDGRID_FROM_EMAIL ?? "noreply@snapcard.ca";
 
 if (apiKey) {
   sgMail.setApiKey(apiKey);
@@ -23,19 +23,19 @@ export async function sendWelcomeEmail(email: string, name: string | null): Prom
 
   await send(
     email,
-    "Welcome to CardList!",
+    "Welcome to SnapCard!",
     `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-      <h2>Welcome to CardList, ${displayName}!</h2>
+      <h2>Welcome to SnapCard, ${displayName}!</h2>
       <p>You're all set to start listing trading cards on eBay faster than ever.</p>
       <h3>Getting Started:</h3>
       <ol>
-        <li><strong>Connect your eBay account</strong> — authorize CardList to create listings</li>
+        <li><strong>Connect your eBay account</strong> — authorize SnapCard to create listings</li>
         <li><strong>Upload a card photo</strong> — our AI identifies it instantly</li>
         <li><strong>Review &amp; publish</strong> — one click to go live on eBay</li>
       </ol>
       <p>
-        <a href="${process.env.FRONTEND_URL ?? "https://cardlist.app"}/onboarding"
+        <a href="${process.env.FRONTEND_URL ?? "https://snapcard.ca"}/onboarding"
            style="display: inline-block; padding: 10px 24px; background: #18181b; color: #fff; border-radius: 6px; text-decoration: none;">
           Get Started
         </a>
@@ -70,7 +70,7 @@ export async function sendListingPublishedEmail(
       </p>
       <p style="color: #666; font-size: 14px; margin-top: 24px;">
         Manage your listings at
-        <a href="${process.env.FRONTEND_URL ?? "https://cardlist.app"}/dashboard">CardList Dashboard</a>.
+        <a href="${process.env.FRONTEND_URL ?? "https://snapcard.ca"}/dashboard">SnapCard Dashboard</a>.
       </p>
     </div>
     `
@@ -96,7 +96,7 @@ export async function sendListingErrorEmail(
       </div>
       <p>You can retry from your dashboard:</p>
       <p>
-        <a href="${process.env.FRONTEND_URL ?? "https://cardlist.app"}/dashboard"
+        <a href="${process.env.FRONTEND_URL ?? "https://snapcard.ca"}/dashboard"
            style="display: inline-block; padding: 10px 24px; background: #18181b; color: #fff; border-radius: 6px; text-decoration: none;">
           Go to Dashboard
         </a>

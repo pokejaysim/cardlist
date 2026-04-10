@@ -51,7 +51,7 @@ export function generateDescription(input: DescriptionInput): string {
   </p>
 
   <p style="text-align: center; margin-top: 20px; color: #888; font-size: 12px;">
-    Listed with CardList
+    Listed with SnapCard
   </p>
 </div>
 `.trim();
