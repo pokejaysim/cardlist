@@ -26,7 +26,7 @@ export interface EbayAccount {
 export type ListingStatus = "draft" | "scheduled" | "published" | "error";
 export type ListingType = "auction" | "fixed_price";
 export type CardCondition = "NM" | "LP" | "MP" | "HP" | "DMG";
-export type CardGame = "pokemon" | "yugioh" | "mtg" | "sports" | "other";
+export type CardGame = "pokemon";
 
 export interface Listing {
   id: string;

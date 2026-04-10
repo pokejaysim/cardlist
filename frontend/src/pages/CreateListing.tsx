@@ -38,10 +38,6 @@ interface CardDetails {
 const CONDITIONS = ["NM", "LP", "MP", "HP", "DMG"] as const;
 const CARD_GAMES = [
   { key: "pokemon", label: "Pokemon" },
-  { key: "yugioh", label: "Yu-Gi-Oh!" },
-  { key: "mtg", label: "MTG" },
-  { key: "sports", label: "Sports" },
-  { key: "other", label: "Other" },
 ] as const;
 
 const STEPS: { key: Step; label: string }[] = [
@@ -74,7 +70,7 @@ export default function CreateListing() {
     rarity: "",
     language: "English",
     condition: "NM",
-    card_game: "",
+    card_game: "pokemon",
   });
 
   const [generatedTitle, setGeneratedTitle] = useState("");
@@ -143,7 +139,7 @@ export default function CreateListing() {
       rarity: "",
       language: "English",
       condition: "NM",
-      card_game: "",
+      card_game: "pokemon",
     });
     setStep("details");
   }
@@ -386,25 +382,12 @@ export default function CreateListing() {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Card Game selector */}
-            <div className="space-y-2">
-              <Label>Card Game</Label>
-              <div className="flex flex-wrap gap-1.5">
-                {CARD_GAMES.map((g) => (
-                  <button
-                    key={g.key}
-                    type="button"
-                    onClick={() => updateCard("card_game", g.key)}
-                    className={`rounded-md border px-3 py-1.5 text-xs font-medium transition ${
-                      card.card_game === g.key
-                        ? "border-primary bg-primary text-primary-foreground"
-                        : "border-input hover:bg-accent"
-                    }`}
-                  >
-                    {g.label}
-                  </button>
-                ))}
-              </div>
+            {/* Card Game — Pokemon only for now */}
+            <div className="flex items-center gap-2 rounded-md bg-muted px-3 py-2">
+              <Badge variant="secondary">Pokemon</Badge>
+              <span className="text-xs text-muted-foreground">
+                More card games coming soon
+              </span>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
