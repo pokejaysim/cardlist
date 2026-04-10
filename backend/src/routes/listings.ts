@@ -31,6 +31,11 @@ router.post("/listings", requireAuth, async (req, res) => {
     return;
   }
 
+  if (!body.condition) {
+    res.status(400).json({ error: "condition is required" });
+    return;
+  }
+
   // ── Check monthly listing limit ──────────────────────
   const { data: user } = await supabase
     .from("users")
@@ -294,10 +299,48 @@ router.post("/listings/:id/generate", requireAuth, async (req, res) => {
   res.json(data);
 });
 
+// ── Get photos for a listing ───────────────────────────
+
+router.get("/listings/:id/photos", requireAuth, async (req, res) => {
+  const authReq = req as AuthenticatedRequest;
+
+  // Verify the listing belongs to this user
+  const { data: listing } = await supabase
+    .from("listings")
+    .select("id")
+    .eq("id", req.params.id)
+    .eq("user_id", authReq.userId)
+    .single();
+
+  if (!listing) {
+    res.status(404).json({ error: "Listing not found" });
+    return;
+  }
+
+  const { data: photos, error } = await supabase
+    .from("photos")
+    .select("*")
+    .eq("listing_id", req.params.id)
+    .order("position", { ascending: true });
+
+  if (error) {
+    res.status(500).json({ error: "Failed to fetch photos", code: "DB_ERROR" });
+    return;
+  }
+
+  res.json(photos ?? []);
+});
+
 // ── Publish listing to eBay ────────────────────────────
 
 router.post("/listings/:id/publish", requireAuth, async (req, res) => {
   const authReq = req as AuthenticatedRequest;
+
+  // Check if eBay integration is configured
+  if (!process.env.EBAY_APP_ID) {
+    res.status(503).json({ error: "eBay integration not configured", code: "EBAY_NOT_CONFIGURED" });
+    return;
+  }
 
   const listingId = req.params.id as string;
 

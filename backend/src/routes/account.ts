@@ -101,6 +101,32 @@ router.get("/account/usage", requireAuth, async (req, res) => {
   });
 });
 
+// ── Complete onboarding ───────────────────────────────
+
+router.patch("/account/onboarding", requireAuth, async (req, res) => {
+  const authReq = req as AuthenticatedRequest;
+  const { onboarding_complete } = req.body as { onboarding_complete?: boolean };
+
+  if (typeof onboarding_complete !== "boolean") {
+    res.status(400).json({ error: "onboarding_complete must be a boolean" });
+    return;
+  }
+
+  const { data, error } = await supabase
+    .from("users")
+    .update({ onboarding_complete })
+    .eq("id", authReq.userId)
+    .select()
+    .single();
+
+  if (error) {
+    res.status(500).json({ error: "Failed to update onboarding status", code: "DB_ERROR" });
+    return;
+  }
+
+  res.json(data);
+});
+
 // ── Check eBay account link status ─────────────────────
 
 router.get("/account/ebay-status", requireAuth, async (req, res) => {

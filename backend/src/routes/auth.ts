@@ -174,24 +174,32 @@ router.post("/auth/ebay-callback", requireAuth, async (req, res) => {
     access_token: string;
     refresh_token?: string;
     expires_in: number;
+    token_type?: string;
   };
 
   // Get eBay user ID via Trading API GetUser call
   const ebayUserId = await fetchEbayUserId(tokenData.access_token);
 
-  // Upsert eBay account
+  // Compute token expiry time
+  const tokenExpiresAt = new Date(Date.now() + tokenData.expires_in * 1000).toISOString();
+
+  // Upsert eBay account with refresh_token and token_expires_at
+  const upsertData: Record<string, unknown> = {
+    user_id: authReq.userId,
+    ebay_token: tokenData.access_token,
+    ebay_user_id: ebayUserId ?? "unknown",
+    site_id: Number(process.env.EBAY_SITE_ID ?? 2),
+    refreshed_at: new Date().toISOString(),
+  };
+
+  if (tokenData.refresh_token) {
+    upsertData.refresh_token = tokenData.refresh_token;
+    upsertData.token_expires_at = tokenExpiresAt;
+  }
+
   const { error } = await supabase
     .from("ebay_accounts")
-    .upsert(
-      {
-        user_id: authReq.userId,
-        ebay_token: tokenData.access_token,
-        ebay_user_id: ebayUserId ?? "unknown",
-        site_id: Number(process.env.EBAY_SITE_ID ?? 2),
-        refreshed_at: new Date().toISOString(),
-      },
-      { onConflict: "user_id" }
-    );
+    .upsert(upsertData, { onConflict: "user_id" });
 
   if (error) {
     console.error("Failed to store eBay account:", error);
