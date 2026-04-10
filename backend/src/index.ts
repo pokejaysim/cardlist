@@ -96,7 +96,7 @@ if (publishQueue) {
 }
 
 app.listen(port, () => {
-  console.log(`CardList API running on port ${port}`);
+  console.log(`SnapCard API running on port ${port}`);
 });
 
 export default app;
