@@ -21,8 +21,8 @@ export default function EbayCallback() {
       body: JSON.stringify({ code }),
     })
       .then(() => {
-        const returnTo = localStorage.getItem("cardlist_ebay_return");
-        localStorage.removeItem("cardlist_ebay_return");
+        const returnTo = localStorage.getItem("snapcard_ebay_return");
+        localStorage.removeItem("snapcard_ebay_return");
         const destination = returnTo === "onboarding" ? "/onboarding"
           : returnTo === "account" ? "/account"
           : "/dashboard";

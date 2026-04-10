@@ -52,7 +52,7 @@ export default function Account() {
     setLinkError("");
     try {
       const { url } = await apiFetch<{ url: string }>("/auth/ebay-oauth-url");
-      localStorage.setItem("cardlist_ebay_return", "account");
+      localStorage.setItem("snapcard_ebay_return", "account");
       window.location.href = url;
     } catch (err) {
       setLinkError(

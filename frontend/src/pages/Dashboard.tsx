@@ -39,7 +39,7 @@ const statusColors: Record<string, "default" | "secondary" | "destructive" | "ou
 export default function Dashboard() {
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [setupDismissed, setSetupDismissed] = useState(
-    () => localStorage.getItem("cardlist_setup_dismissed") === "true"
+    () => localStorage.getItem("snapcard_setup_dismissed") === "true"
   );
 
   const { data: listings, isLoading } = useQuery({
@@ -160,7 +160,7 @@ export default function Dashboard() {
                 </div>
                 <button
                   onClick={() => {
-                    localStorage.setItem("cardlist_setup_dismissed", "true");
+                    localStorage.setItem("snapcard_setup_dismissed", "true");
                     setSetupDismissed(true);
                   }}
                   className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground"

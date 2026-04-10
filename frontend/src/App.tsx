@@ -14,7 +14,7 @@ import Account from "@/pages/Account";
 const queryClient = new QueryClient();
 
 function RootRedirect() {
-  const done = localStorage.getItem("cardlist_onboarding_complete");
+  const done = localStorage.getItem("snapcard_onboarding_complete");
   return <Navigate to={done ? "/dashboard" : "/onboarding"} replace />;
 }
 

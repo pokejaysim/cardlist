@@ -13,7 +13,7 @@ export default function Login() {
 
   useEffect(() => {
     if (DEV_MODE) {
-      const dest = localStorage.getItem("cardlist_onboarding_complete") ? "/dashboard" : "/onboarding";
+      const dest = localStorage.getItem("snapcard_onboarding_complete") ? "/dashboard" : "/onboarding";
       navigate(dest, { replace: true });
     }
   }, [navigate]);
@@ -43,7 +43,7 @@ export default function Login() {
       });
 
       localStorage.setItem("access_token", result.access_token);
-      const dest = localStorage.getItem("cardlist_onboarding_complete") ? "/dashboard" : "/onboarding";
+      const dest = localStorage.getItem("snapcard_onboarding_complete") ? "/dashboard" : "/onboarding";
       navigate(dest);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
@@ -57,7 +57,7 @@ export default function Login() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold">Welcome Back</CardTitle>
-          <CardDescription>Log in to CardList</CardDescription>
+          <CardDescription>Log in to SnapCard</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">

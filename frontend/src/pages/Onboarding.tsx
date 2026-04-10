@@ -28,9 +28,9 @@ export default function Onboarding() {
 
   // Check if returning from eBay OAuth or if eBay is already linked
   useEffect(() => {
-    const returnFlag = localStorage.getItem("cardlist_ebay_return");
+    const returnFlag = localStorage.getItem("snapcard_ebay_return");
     if (returnFlag === "onboarding") {
-      localStorage.removeItem("cardlist_ebay_return");
+      localStorage.removeItem("snapcard_ebay_return");
     }
 
     apiFetch<{ linked: boolean }>("/account/ebay-status")
@@ -53,7 +53,7 @@ export default function Onboarding() {
     setError("");
     try {
       const { url } = await apiFetch<{ url: string }>("/auth/ebay-oauth-url");
-      localStorage.setItem("cardlist_ebay_return", "onboarding");
+      localStorage.setItem("snapcard_ebay_return", "onboarding");
       window.location.href = url;
     } catch (err) {
       setError(
@@ -67,7 +67,7 @@ export default function Onboarding() {
 
   async function completeOnboarding(destination: string) {
     // Persist completion both locally and server-side
-    localStorage.setItem("cardlist_onboarding_complete", "true");
+    localStorage.setItem("snapcard_onboarding_complete", "true");
 
     // Best-effort server-side persistence (don't block navigation if it fails)
     try {
@@ -103,7 +103,7 @@ export default function Onboarding() {
         {step === "welcome" && (
           <Card>
             <CardHeader className="text-center">
-              <CardTitle className="text-2xl">Welcome to CardList</CardTitle>
+              <CardTitle className="text-2xl">Welcome to SnapCard</CardTitle>
               <CardDescription>
                 Let's get you set up to list cards on eBay in minutes.
               </CardDescription>
@@ -136,13 +136,13 @@ export default function Onboarding() {
             <CardHeader className="text-center">
               <CardTitle>Connect Your eBay Account</CardTitle>
               <CardDescription>
-                CardList needs access to create listings on your behalf.
+                SnapCard needs access to create listings on your behalf.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="rounded-lg bg-muted p-4 text-sm text-muted-foreground">
                 <p>
-                  You'll be redirected to eBay to authorize CardList. We only
+                  You'll be redirected to eBay to authorize SnapCard. We only
                   request permission to:
                 </p>
                 <ul className="mt-2 list-disc space-y-1 pl-5">
@@ -204,7 +204,7 @@ export default function Onboarding() {
             <CardHeader className="text-center">
               <CardTitle>You're All Set!</CardTitle>
               <CardDescription>
-                Here's how CardList works.
+                Here's how SnapCard works.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">

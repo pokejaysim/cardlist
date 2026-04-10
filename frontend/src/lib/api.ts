@@ -24,7 +24,7 @@ function devMockResponse<T>(path: string, options?: RequestInit): T | null {
 
   // GET /account
   if (path === "/account" && (!options?.method || options.method === "GET")) {
-    return { id: "dev", email: "demo@cardlist.dev", name: "Demo User", plan: "free" } as unknown as T;
+    return { id: "dev", email: "demo@snapcard.dev", name: "Demo User", plan: "free" } as unknown as T;
   }
 
   // POST /listings (save draft)

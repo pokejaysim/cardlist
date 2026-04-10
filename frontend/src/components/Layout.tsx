@@ -40,7 +40,7 @@ export default function Layout() {
         >
           {mobileOpen ? <X className="size-5" /> : <Menu className="size-5" />}
         </button>
-        <h1 className="ml-3 text-lg font-bold tracking-tight">CardList</h1>
+        <h1 className="ml-3 text-lg font-bold tracking-tight">SnapCard</h1>
       </div>
 
       {/* Mobile overlay */}
@@ -59,7 +59,7 @@ export default function Layout() {
       >
         {/* Brand — hidden on mobile (mobile has its own header) */}
         <div className="hidden border-b px-4 py-4 md:block">
-          <h1 className="text-lg font-bold tracking-tight">CardList</h1>
+          <h1 className="text-lg font-bold tracking-tight">SnapCard</h1>
         </div>
 
         {/* Spacer for mobile header */}

@@ -6,7 +6,7 @@ export const DEV_MODE = import.meta.env.VITE_DEV_MODE === "true";
 
 export const DEV_USER = {
   id: "dev-user-00000000-0000-0000-0000-000000000000",
-  email: "demo@cardlist.dev",
+  email: "demo@snapcard.dev",
   name: "Demo User",
 };
 

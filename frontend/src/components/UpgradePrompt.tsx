@@ -24,7 +24,7 @@ export function UpgradePrompt({ onClose }: UpgradePromptProps) {
           </div>
           <h2 className="text-xl font-bold">Upgrade to Pro</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Unlock the full power of CardList
+            Unlock the full power of SnapCard
           </p>
         </div>
 

@@ -39,7 +39,7 @@ export default function Register() {
       localStorage.setItem("access_token", result.access_token);
 
       // New users go to onboarding; returning users (re-registering) go to dashboard
-      const dest = localStorage.getItem("cardlist_onboarding_complete")
+      const dest = localStorage.getItem("snapcard_onboarding_complete")
         ? "/dashboard"
         : "/onboarding";
       navigate(dest);
