@@ -71,7 +71,10 @@ export default function Onboarding() {
 
     // Best-effort server-side persistence (don't block navigation if it fails)
     try {
-      await apiFetch("/account/onboarding", { method: "PATCH" });
+      await apiFetch("/account/onboarding", {
+        method: "PATCH",
+        body: JSON.stringify({ onboarding_complete: true }),
+      });
     } catch {
       // Server endpoint may not exist yet — that's OK, localStorage is the fallback
     }
