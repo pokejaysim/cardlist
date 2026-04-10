@@ -345,7 +345,6 @@ export default function CreateListing() {
               <Button
                 variant="outline"
                 onClick={handleManualEntry}
-                disabled={photos.length === 0}
                 className="flex-1"
               >
                 Enter Details Manually
