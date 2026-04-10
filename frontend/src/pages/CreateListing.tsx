@@ -56,7 +56,7 @@ export default function CreateListing() {
   const navigate = useNavigate();
   const [step, setStep] = useState<Step>("photos");
   const [photos, setPhotos] = useState<PhotoFile[]>([]);
-  const [identifying, setIdentifying] = useState(false);
+  const [_identifying, setIdentifying] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [identifiedBy, setIdentifiedBy] = useState<"manual" | "ai">("manual");

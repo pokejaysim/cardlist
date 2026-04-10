@@ -37,7 +37,12 @@ export default function Register() {
       });
 
       localStorage.setItem("access_token", result.access_token);
-      navigate("/onboarding");
+
+      // New users go to onboarding; returning users (re-registering) go to dashboard
+      const dest = localStorage.getItem("cardlist_onboarding_complete")
+        ? "/dashboard"
+        : "/onboarding";
+      navigate(dest);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Registration failed");
     } finally {

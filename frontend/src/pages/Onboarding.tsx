@@ -14,6 +14,7 @@ import {
   ExternalLink,
   ArrowRight,
   Loader2,
+  AlertTriangle,
 } from "lucide-react";
 
 type Step = "welcome" | "ebay" | "ready";
@@ -23,6 +24,7 @@ export default function Onboarding() {
   const [step, setStep] = useState<Step>("welcome");
   const [linking, setLinking] = useState(false);
   const [ebayLinked, setEbayLinked] = useState(false);
+  const [error, setError] = useState("");
 
   // Check if returning from eBay OAuth or if eBay is already linked
   useEffect(() => {
@@ -48,17 +50,32 @@ export default function Onboarding() {
 
   async function linkEbay() {
     setLinking(true);
+    setError("");
     try {
       const { url } = await apiFetch<{ url: string }>("/auth/ebay-oauth-url");
       localStorage.setItem("cardlist_ebay_return", "onboarding");
       window.location.href = url;
-    } catch {
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to connect to eBay. Please try again."
+      );
       setLinking(false);
     }
   }
 
-  function completeOnboarding(destination: string) {
+  async function completeOnboarding(destination: string) {
+    // Persist completion both locally and server-side
     localStorage.setItem("cardlist_onboarding_complete", "true");
+
+    // Best-effort server-side persistence (don't block navigation if it fails)
+    try {
+      await apiFetch("/account/onboarding", { method: "PATCH" });
+    } catch {
+      // Server endpoint may not exist yet — that's OK, localStorage is the fallback
+    }
+
     navigate(destination);
   }
 
@@ -131,6 +148,13 @@ export default function Onboarding() {
                   <li>View your seller account info</li>
                 </ul>
               </div>
+
+              {error && (
+                <div className="flex items-start gap-2 rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+                  <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                  <span>{error}</span>
+                </div>
+              )}
 
               {ebayLinked ? (
                 <div className="flex items-center gap-2 rounded-lg bg-primary/10 p-3 text-sm font-medium text-primary">

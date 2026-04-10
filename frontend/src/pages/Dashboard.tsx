@@ -1,4 +1,3 @@
-import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -38,8 +37,6 @@ const statusColors: Record<string, "default" | "secondary" | "destructive" | "ou
 };
 
 export default function Dashboard() {
-  const { user, signOut } = useAuth();
-  const [linking, setLinking] = useState(false);
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [setupDismissed, setSetupDismissed] = useState(
     () => localStorage.getItem("cardlist_setup_dismissed") === "true"
@@ -61,13 +58,11 @@ export default function Dashboard() {
   });
 
   async function linkEbay() {
-    setLinking(true);
     try {
       const { url } = await apiFetch<{ url: string }>("/auth/ebay-oauth-url");
       window.location.href = url;
     } catch (err) {
       console.error("Failed to get eBay OAuth URL:", err);
-      setLinking(false);
     }
   }
 
@@ -82,18 +77,7 @@ export default function Dashboard() {
 
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Dashboard</h1>
-          <p className="text-sm text-muted-foreground">{user?.email}</p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={linkEbay} disabled={linking}>
-            {linking ? "Redirecting..." : "Link eBay"}
-          </Button>
-          <Button variant="ghost" onClick={signOut}>
-            Log Out
-          </Button>
-        </div>
+        <h1 className="text-2xl font-bold">Dashboard</h1>
       </div>
 
       {/* Plan / Usage bar */}

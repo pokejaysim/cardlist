@@ -1,6 +1,5 @@
 import { useCallback, useState } from "react";
 import { Upload, X, Image } from "lucide-react";
-import { Button } from "@/components/ui/button";
 
 interface PhotoFile {
   file: File;

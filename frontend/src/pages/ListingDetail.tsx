@@ -15,6 +15,7 @@ import {
   Pencil,
   Check,
   X,
+  ImageIcon,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -36,6 +37,13 @@ interface Listing {
   ebay_error: string | null;
   created_at: string;
   published_at: string | null;
+}
+
+interface Photo {
+  id: string;
+  file_url: string;
+  ebay_url: string | null;
+  position: number;
 }
 
 const statusColors: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
@@ -63,6 +71,12 @@ export default function ListingDetail() {
   const { data: listing, isLoading } = useQuery({
     queryKey: ["listing", id],
     queryFn: () => apiFetch<Listing>(`/listings/${id}`),
+    enabled: !!id,
+  });
+
+  const { data: photos } = useQuery({
+    queryKey: ["listing-photos", id],
+    queryFn: () => apiFetch<Photo[]>(`/listings/${id}/photos`),
     enabled: !!id,
   });
 
@@ -195,6 +209,40 @@ export default function ListingDetail() {
             <p>{listing.ebay_error}</p>
           </div>
         </div>
+      )}
+
+      {/* Photos */}
+      {photos && photos.length > 0 && (
+        <Card className="mb-4">
+          <CardHeader>
+            <CardTitle className="text-base">Photos</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-4 gap-2">
+              {photos.map((photo) => (
+                <div
+                  key={photo.id}
+                  className="relative aspect-square overflow-hidden rounded-lg border bg-muted"
+                >
+                  <img
+                    src={photo.ebay_url ?? photo.file_url}
+                    alt={`Card photo ${photo.position + 1}`}
+                    className="size-full object-cover"
+                  />
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {photos && photos.length === 0 && (
+        <Card className="mb-4">
+          <CardContent className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
+            <ImageIcon className="size-4" />
+            No photos uploaded yet.
+          </CardContent>
+        </Card>
       )}
 
       {/* Card Details */}
