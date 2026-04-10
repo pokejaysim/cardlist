@@ -16,8 +16,9 @@ import {
   Check,
   X,
   ImageIcon,
+  Upload,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useRef } from "react";
 
 interface Listing {
   id: string;
@@ -64,6 +65,9 @@ export default function ListingDetail() {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Edit form state
   const [editFields, setEditFields] = useState<Record<string, string | number | null>>({});
@@ -158,6 +162,43 @@ export default function ListingDetail() {
     }
   }
 
+  async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    if (!e.target.files || !id) return;
+    setUploading(true);
+    setError("");
+
+    try {
+      const currentCount = photos?.length ?? 0;
+      const files = Array.from(e.target.files).slice(0, 4 - currentCount);
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        if (!file || !file.type.startsWith("image/")) continue;
+
+        const formData = new FormData();
+        formData.append("photo", file);
+        formData.append("position", String(currentCount + i + 1));
+
+        const token = localStorage.getItem("access_token");
+        const apiBase = import.meta.env.VITE_API_URL || "/api";
+        await fetch(`${apiBase}/listings/${id}/photos`, {
+          method: "POST",
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          body: formData,
+        }).then((res) => {
+          if (!res.ok) throw new Error("Upload failed");
+        });
+      }
+
+      await queryClient.invalidateQueries({ queryKey: ["listing-photos", id] });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to upload photos");
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -231,6 +272,25 @@ export default function ListingDetail() {
                   />
                 </div>
               ))}
+              {isDraft && photos.length < 4 && (
+                <label className="flex cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-muted-foreground/25 transition hover:border-muted-foreground/50">
+                  {uploading ? (
+                    <Loader2 className="size-5 animate-spin text-muted-foreground" />
+                  ) : (
+                    <Upload className="size-5 text-muted-foreground" />
+                  )}
+                  <span className="text-xs text-muted-foreground">Add</span>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={handlePhotoUpload}
+                    className="hidden"
+                    disabled={uploading}
+                  />
+                </label>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -238,9 +298,36 @@ export default function ListingDetail() {
 
       {photos && photos.length === 0 && (
         <Card className="mb-4">
-          <CardContent className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
-            <ImageIcon className="size-4" />
-            No photos uploaded yet.
+          <CardContent className="py-6">
+            {isDraft ? (
+              <label className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed border-muted-foreground/25 p-6 transition hover:border-muted-foreground/50">
+                {uploading ? (
+                  <Loader2 className="size-8 animate-spin text-muted-foreground" />
+                ) : (
+                  <Upload className="size-8 text-muted-foreground" />
+                )}
+                <p className="text-sm font-medium">
+                  {uploading ? "Uploading..." : "Upload card photos"}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Front and back of the card (up to 4)
+                </p>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handlePhotoUpload}
+                  className="hidden"
+                  disabled={uploading}
+                />
+              </label>
+            ) : (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <ImageIcon className="size-4" />
+                No photos uploaded.
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
