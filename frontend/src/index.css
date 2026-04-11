@@ -1,7 +1,10 @@
 @import "tailwindcss";
 
+/* Force light mode — no dark mode override (like StockX/GOAT) */
+:root { color-scheme: light; }
+
 @theme {
-  --color-background: hsl(60 10% 98%);
+  --color-background: hsl(210 20% 98%);
   --color-foreground: hsl(220 20% 10%);
   --color-card: hsl(0 0% 100%);
   --color-card-foreground: hsl(220 20% 10%);
@@ -20,33 +23,10 @@
   --color-border: hsl(220 13% 91%);
   --color-input: hsl(220 13% 91%);
   --color-ring: hsl(160 84% 36%);
-  --radius: 0.375rem;
+  --color-sidebar: hsl(0 0% 100%);
+  --radius: 0.625rem;
   --font-sans: "Inter", system-ui, -apple-system, sans-serif;
   --font-heading: "DM Sans", system-ui, -apple-system, sans-serif;
-}
-
-@media (prefers-color-scheme: dark) {
-  @theme {
-    --color-background: hsl(220 15% 6%);
-    --color-foreground: hsl(0 0% 98%);
-    --color-card: hsl(220 15% 10%);
-    --color-card-foreground: hsl(0 0% 98%);
-    --color-popover: hsl(220 15% 10%);
-    --color-popover-foreground: hsl(0 0% 98%);
-    --color-primary: hsl(160 84% 36%);
-    --color-primary-foreground: hsl(0 0% 100%);
-    --color-secondary: hsl(220 14% 14%);
-    --color-secondary-foreground: hsl(0 0% 98%);
-    --color-muted: hsl(220 14% 14%);
-    --color-muted-foreground: hsl(220 10% 60%);
-    --color-accent: hsl(160 30% 12%);
-    --color-accent-foreground: hsl(160 60% 60%);
-    --color-destructive: hsl(0 62% 35%);
-    --color-destructive-foreground: hsl(0 0% 98%);
-    --color-border: hsl(220 14% 16%);
-    --color-input: hsl(220 14% 16%);
-    --color-ring: hsl(160 84% 36%);
-  }
 }
 
 /* ── Base ──────────────────────────────────────────── */
@@ -68,27 +48,46 @@ h1, h2, h3, [data-slot="card-title"] {
 
 /* ── Component enhancements ────────────────────────── */
 
-/* Card hover lift */
+/* Card — soft shadow with lift on hover */
 [data-slot="card"] {
-  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.04), 0 1px 2px -1px rgb(0 0 0 / 0.04);
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.06);
   transition: box-shadow 0.2s ease, transform 0.2s ease;
 }
 
-/* Primary button glow on hover */
+[data-slot="card"]:hover {
+  box-shadow: 0 8px 24px -4px rgb(0 0 0 / 0.08), 0 2px 6px -2px rgb(0 0 0 / 0.04);
+}
+
+/* Primary button — modern hover with subtle glow */
 [data-slot="button"][data-variant="default"] {
   font-weight: 600;
   letter-spacing: -0.01em;
-  transition: background-color 0.15s ease, box-shadow 0.2s ease;
+  transition: background-color 0.15s ease, box-shadow 0.2s ease, transform 0.15s ease;
 }
 
 [data-slot="button"][data-variant="default"]:hover {
-  box-shadow: 0 4px 14px 0 hsl(160 84% 36% / 0.25);
+  box-shadow: 0 4px 14px 0 hsl(160 84% 36% / 0.3);
+  transform: translateY(-1px);
 }
 
-/* Input focus transitions */
+[data-slot="button"][data-variant="default"]:active {
+  transform: translateY(0);
+}
+
+/* Input — soft focus ring */
 [data-slot="input"],
 [data-slot="textarea"] {
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+[data-slot="input"]:focus,
+[data-slot="textarea"]:focus {
+  box-shadow: 0 0 0 3px hsl(160 84% 36% / 0.1);
+}
+
+/* Badge — slightly softer */
+[data-slot="badge"] {
+  font-weight: 500;
 }
 
 /* ── Animations ────────────────────────────────────── */
@@ -111,5 +110,5 @@ h1, h2, h3, [data-slot="card-title"] {
 /* ── Auth page background ──────────────────────────── */
 
 .auth-bg {
-  background: radial-gradient(ellipse at top, hsl(160 40% 96%) 0%, hsl(60 10% 98%) 70%);
+  background: linear-gradient(135deg, hsl(160 40% 97%) 0%, hsl(210 20% 98%) 50%, hsl(260 30% 97%) 100%);
 }

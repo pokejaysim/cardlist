@@ -58,7 +58,7 @@ export default function Login() {
         <h1 className="mb-8 text-center font-heading text-2xl font-bold tracking-tight">
           <span className="text-primary">Snap</span>Card
         </h1>
-        <Card className="border-0 shadow-lg">
+        <Card className="border shadow-xl shadow-black/5">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold">Welcome Back</CardTitle>
           <CardDescription>Log in to SnapCard</CardDescription>
