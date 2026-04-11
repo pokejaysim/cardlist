@@ -121,6 +121,9 @@ export default function CreateListing() {
         language: result.language,
         condition: result.condition,
         card_game: result.card_game ?? "",
+        card_type: result.card_type ?? "raw",
+        grading_company: result.grading_company ?? "",
+        grade: result.grade ?? "",
         confidence: result.confidence,
       });
       setIdentifiedBy("ai");

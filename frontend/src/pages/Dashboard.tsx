@@ -6,7 +6,6 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import {
   Plus,
-  ExternalLink,
   Loader2,
   Crown,
   CheckCircle2,
