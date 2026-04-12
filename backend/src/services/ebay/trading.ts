@@ -89,6 +89,9 @@ export async function ebayTradingApi(
       "X-EBAY-API-SITEID": siteId,
       "X-EBAY-API-COMPATIBILITY-LEVEL": "967",
       "X-EBAY-API-CALL-NAME": callName,
+      "X-EBAY-API-APP-NAME": process.env.EBAY_APP_ID ?? "",
+      "X-EBAY-API-DEV-NAME": process.env.EBAY_DEV_ID ?? "",
+      "X-EBAY-API-CERT-NAME": process.env.EBAY_CERT_ID ?? "",
     },
     body: xmlBody,
   });
