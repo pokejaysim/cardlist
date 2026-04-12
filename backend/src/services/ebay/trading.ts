@@ -34,6 +34,7 @@ const xmlBuilder = new XMLBuilder({
   ignoreAttributes: false,
   processEntities: false,
   suppressBooleanAttributes: false,
+  cdataPropName: "__cdata",
 });
 
 const xmlParser = new XMLParser({
@@ -167,7 +168,7 @@ function buildItemPayload(listing: ListingData): Record<string, unknown> {
   return {
     Item: {
       Title: listing.title,
-      Description: listing.description,
+      Description: { __cdata: listing.description },
       PrimaryCategory: {
         CategoryID: "183454",
       },
