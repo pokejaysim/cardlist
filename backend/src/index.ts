@@ -17,7 +17,12 @@ import { sendListingPublishedEmail, sendListingErrorEmail } from "./services/ema
 const app = express();
 const port = process.env.PORT ?? 3001;
 
-app.use(cors({ origin: process.env.FRONTEND_URL ?? "http://localhost:5173" }));
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  "http://localhost:5173",
+].filter(Boolean) as string[];
+
+app.use(cors({ origin: allowedOrigins }));
 app.use(express.json());
 
 // Routes
