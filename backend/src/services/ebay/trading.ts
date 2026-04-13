@@ -157,8 +157,25 @@ export async function uploadSiteHostedPictures(
 // Build Item payload from ListingData
 // ---------------------------------------------------------------------------
 
+function getListingLocation(): { Location?: string; PostalCode?: string } {
+  const location = process.env.EBAY_LOCATION;
+  const postalCode = process.env.EBAY_POSTAL_CODE;
+
+  if (!location && !postalCode) {
+    throw new Error(
+      "eBay listing location is not configured. Set EBAY_LOCATION or EBAY_POSTAL_CODE."
+    );
+  }
+
+  const result: { Location?: string; PostalCode?: string } = {};
+  if (location) result.Location = location;
+  if (postalCode) result.PostalCode = postalCode;
+  return result;
+}
+
 function buildItemPayload(listing: ListingData): Record<string, unknown> {
   const conditionId = CONDITION_MAP[listing.condition] ?? 4000;
+  const locationFields = getListingLocation();
 
   return {
     Item: {
@@ -170,6 +187,7 @@ function buildItemPayload(listing: ListingData): Record<string, unknown> {
       StartPrice: listing.price_cad,
       Currency: "CAD",
       Country: "CA",
+      ...locationFields,
       ListingType:
         listing.listing_type === "auction" ? "Chinese" : "FixedPriceItem",
       ListingDuration: `Days_${String(listing.duration)}`,

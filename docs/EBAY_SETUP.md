@@ -149,6 +149,10 @@ If eBay flags your app for review or you want to use restricted APIs:
 | `EBAY_ENVIRONMENT` | Yes | `sandbox` | `sandbox` or `production` |
 | `EBAY_SITE_ID` | No | `2` | eBay site (2 = Canada) |
 | `EBAY_MOCK_MODE` | No | `false` | Skip real API calls when `true` |
+| `EBAY_LOCATION` | Yes* | — | Item location string (e.g. `Vancouver, BC`)
+| `EBAY_POSTAL_CODE` | Yes* | — | Item postal code (e.g. `V6B1A1`)
+
+*At least one of `EBAY_LOCATION` or `EBAY_POSTAL_CODE` must be set to publish listings. eBay requires either `Item.Location` or `Item.PostalCode` in every listing.
 
 **Mock mode** activates automatically when `EBAY_MOCK_MODE=true` OR `EBAY_APP_ID` is not set. In mock mode, OAuth returns fake tokens and publish creates mock eBay item IDs.
 
