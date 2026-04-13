@@ -122,6 +122,24 @@ async function fetchUserJson<T>(userId: string, path: string): Promise<T> {
 
   if (!response.ok) {
     const errorText = await response.text();
+
+    // Check for Business Policy opt-in error (error 20403)
+    try {
+      const errorJson = JSON.parse(errorText);
+      const errorCode = errorJson?.errors?.[0]?.errorId ?? errorJson?.errorId;
+      if (errorCode === 20403 || errorText.includes("20403") || errorText.includes("not eligible for Business Policy")) {
+        throw new Error(
+          "Your eBay account is not opted into Business Policies yet. Enable Business Policies in your eBay sandbox account and create shipping, payment, and return policies."
+        );
+      }
+    } catch (e) {
+      // Re-throw our friendly error
+      if (e instanceof Error && e.message.includes("not opted into Business Policies")) {
+        throw e;
+      }
+      // Not JSON or a different parse error — fall through to generic message
+    }
+
     throw new Error(`eBay seller settings request failed: ${errorText}`);
   }
 
@@ -386,10 +404,32 @@ export async function getEbayPublishSettingsState(
     await getStoredSellerSettings(userId),
     marketplaceId,
   );
-  const policies = await fetchSellerBusinessPolicies(
-    userId,
-    settings?.marketplace_id ?? marketplaceId,
-  );
+
+  let policies: EbayBusinessPolicyBundle;
+  try {
+    policies = await fetchSellerBusinessPolicies(
+      userId,
+      settings?.marketplace_id ?? marketplaceId,
+    );
+  } catch (err) {
+    // If Business Policies API fails (e.g. not opted in), return empty policies
+    // with a helpful error message
+    const errMsg = err instanceof Error ? err.message : String(err);
+    return {
+      linked: true,
+      marketplace_id: settings?.marketplace_id ?? marketplaceId,
+      settings,
+      available_policies: {
+        fulfillment: [],
+        payment: [],
+        return: [],
+      },
+      readiness: {
+        ready: false,
+        missing: [errMsg],
+      },
+    };
+  }
 
   const autoSelection = buildAutoSelectionPayload(
     settings,
