@@ -1,111 +1,232 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { XMLParser } from "fast-xml-parser";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  ebayTradingApi,
+  getEbayUserId,
+  verifyAddItem,
+} from "../../src/services/ebay/trading.js";
+import type { ListingData } from "../../src/services/ebay/trading.js";
 
-// ---------------------------------------------------------------------------
-// We test the shape of the XML and headers by calling ebayTradingApi
-// through a mocked fetch. We also test fetchEbayUserId parsing.
-// ---------------------------------------------------------------------------
+function buildListingData(
+  overrides: Partial<ListingData> = {},
+): ListingData {
+  return {
+    categoryId: "183454",
+    title: "Test listing",
+    description: "Card description",
+    price_cad: 10,
+    photo_urls: ["https://example.com/card.jpg"],
+    listing_type: "auction",
+    listing_duration: "Days_7",
+    condition_id: 4000,
+    postal_code: "V5V1A1",
+    location: undefined,
+    item_specifics: [
+      {
+        Name: "Game",
+        Value: ["Pokemon TCG"],
+      },
+    ],
+    seller_profiles: {
+      SellerShippingProfile: { ShippingProfileID: "ship-1" },
+      SellerReturnProfile: { ReturnProfileID: "return-1" },
+      SellerPaymentProfile: { PaymentProfileID: "payment-1" },
+    },
+    condition_descriptors: [
+      {
+        Name: "27501",
+        Value: ["40001"],
+      },
+    ],
+    ...overrides,
+  };
+}
 
-// Mock environment for tests
-process.env.EBAY_SITE_ID = "2";
-process.env.EBAY_APP_ID = "test-app-id";
-process.env.EBAY_DEV_ID = "test-dev-id";
-process.env.EBAY_CERT_ID = "test-cert-id";
-process.env.EBAY_ENVIRONMENT = "sandbox";
+describe("ebayTradingApi OAuth transport", () => {
+  const originalEnvironment = process.env.EBAY_ENVIRONMENT;
+  const originalSiteId = process.env.EBAY_SITE_ID;
+  const originalLocation = process.env.EBAY_LOCATION;
+  const originalPostalCode = process.env.EBAY_POSTAL_CODE;
 
-// We need to import after env vars are set
-const { ebayTradingApi } = await import("../../src/services/ebay/trading.js");
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
 
-const xmlParser = new XMLParser({
-  ignoreAttributes: false,
-  processEntities: false,
-});
+    if (originalEnvironment === undefined) {
+      delete process.env.EBAY_ENVIRONMENT;
+    } else {
+      process.env.EBAY_ENVIRONMENT = originalEnvironment;
+    }
 
-describe("eBay Trading API OAuth headers", () => {
-  let fetchSpy: ReturnType<typeof vi.fn>;
+    if (originalSiteId === undefined) {
+      delete process.env.EBAY_SITE_ID;
+    } else {
+      process.env.EBAY_SITE_ID = originalSiteId;
+    }
 
-  beforeEach(() => {
-    fetchSpy = vi.fn().mockResolvedValue({
-      ok: true,
-      text: () =>
-        Promise.resolve(
-          `<?xml version="1.0" encoding="utf-8"?>
+    if (originalLocation === undefined) {
+      delete process.env.EBAY_LOCATION;
+    } else {
+      process.env.EBAY_LOCATION = originalLocation;
+    }
+
+    if (originalPostalCode === undefined) {
+      delete process.env.EBAY_POSTAL_CODE;
+    } else {
+      process.env.EBAY_POSTAL_CODE = originalPostalCode;
+    }
+  });
+
+  it("sends the OAuth token in X-EBAY-API-IAF-TOKEN and omits RequesterCredentials", async () => {
+    process.env.EBAY_ENVIRONMENT = "sandbox";
+    process.env.EBAY_SITE_ID = "2";
+
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        `<?xml version="1.0" encoding="utf-8"?>
+<VerifyAddItemResponse xmlns="urn:ebay:apis:eBLBaseComponents">
+  <Ack>Success</Ack>
+</VerifyAddItemResponse>`,
+        {
+          status: 200,
+          headers: { "Content-Type": "text/xml" },
+        },
+      ),
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await ebayTradingApi(
+      "VerifyAddItem",
+      {
+        Item: {
+          Title: "Test listing",
+        },
+      },
+      "oauth-user-token",
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    const [url, request] = fetchMock.mock.calls[0] as [
+      string,
+      RequestInit,
+    ];
+
+    expect(url).toBe("https://api.sandbox.ebay.com/ws/api.dll");
+    expect(request.headers).toEqual(
+      expect.objectContaining({
+        "Content-Type": "text/xml",
+        "X-EBAY-API-CALL-NAME": "VerifyAddItem",
+        "X-EBAY-API-COMPATIBILITY-LEVEL": "967",
+        "X-EBAY-API-IAF-TOKEN": "oauth-user-token",
+        "X-EBAY-API-SITEID": "2",
+      }),
+    );
+    expect(request.headers).not.toHaveProperty("X-EBAY-API-APP-NAME");
+    expect(request.headers).not.toHaveProperty("X-EBAY-API-CERT-NAME");
+    expect(request.headers).not.toHaveProperty("X-EBAY-API-DEV-NAME");
+    expect(request.body).not.toContain("RequesterCredentials");
+    expect(request.body).not.toContain("eBayAuthToken");
+  });
+
+  it("reads the seller UserID from a GetUser Trading API response", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        `<?xml version="1.0" encoding="utf-8"?>
 <GetUserResponse xmlns="urn:ebay:apis:eBLBaseComponents">
   <Ack>Success</Ack>
-  <UserID>test-seller</UserID>
-</GetUserResponse>`
-        ),
-    });
-    vi.stubGlobal("fetch", fetchSpy);
+  <User>
+    <UserID>sandbox-seller</UserID>
+  </User>
+</GetUserResponse>`,
+        {
+          status: 200,
+          headers: { "Content-Type": "text/xml" },
+        },
+      ),
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getEbayUserId("oauth-user-token")).resolves.toBe(
+      "sandbox-seller",
+    );
   });
 
-  it("sends X-EBAY-API-IAF-TOKEN header with the OAuth token", async () => {
-    await ebayTradingApi("GetUser", {}, "oauth-token-123");
-
-    const callHeaders = fetchSpy.mock.calls[0][1].headers as Record<
-      string,
-      string
-    >;
-    expect(callHeaders["X-EBAY-API-IAF-TOKEN"]).toBe("oauth-token-123");
-  });
-
-  it("does NOT send legacy X-EBAY-API-APP-NAME / DEV / CERT headers", async () => {
-    await ebayTradingApi("GetUser", {}, "oauth-token-123");
-
-    const callHeaders = fetchSpy.mock.calls[0][1].headers as Record<
-      string,
-      string
-    >;
-    expect(callHeaders).not.toHaveProperty("X-EBAY-API-APP-NAME");
-    expect(callHeaders).not.toHaveProperty("X-EBAY-API-DEV-NAME");
-    expect(callHeaders).not.toHaveProperty("X-EBAY-API-CERT-NAME");
-  });
-
-  it("does NOT include RequesterCredentials in the XML body", async () => {
-    await ebayTradingApi("GetUser", {}, "oauth-token-123");
-
-    const xmlBody = fetchSpy.mock.calls[0][1].body as string;
-    expect(xmlBody).not.toContain("RequesterCredentials");
-    expect(xmlBody).not.toContain("eBayAuthToken");
-
-    // Verify it's valid XML with the right call name
-    const parsed = xmlParser.parse(xmlBody) as Record<string, unknown>;
-    expect(parsed).toHaveProperty("GetUserRequest");
-  });
-
-  it("includes the correct X-EBAY-API-CALL-NAME header", async () => {
-    await ebayTradingApi("AddItem", {}, "oauth-token-123");
-
-    const callHeaders = fetchSpy.mock.calls[0][1].headers as Record<
-      string,
-      string
-    >;
-    expect(callHeaders["X-EBAY-API-CALL-NAME"]).toBe("AddItem");
-  });
-});
-
-describe("GetUser UserID parsing", () => {
-  it("parses UserID from a successful GetUser response", () => {
-    const responseXml = `<?xml version="1.0" encoding="utf-8"?>
-<GetUserResponse xmlns="urn:ebay:apis:eBLBaseComponents">
+  it("includes the configured postal code in listing verification requests", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        `<?xml version="1.0" encoding="utf-8"?>
+<VerifyAddItemResponse xmlns="urn:ebay:apis:eBLBaseComponents">
   <Ack>Success</Ack>
-  <UserID>test-seller</UserID>
-</GetUserResponse>`;
+</VerifyAddItemResponse>`,
+        {
+          status: 200,
+          headers: { "Content-Type": "text/xml" },
+        },
+      ),
+    );
 
-    const match = responseXml.match(/<UserID>([^<]+)<\/UserID>/);
-    expect(match?.[1]).toBe("test-seller");
+    vi.stubGlobal("fetch", fetchMock);
+
+    await verifyAddItem(buildListingData(), "oauth-user-token");
+
+    const [, request] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(request.body).toContain("<PostalCode>V5V1A1</PostalCode>");
+    expect(request.body).not.toContain("<Location></Location>");
+    expect(request.body).not.toContain("<PostalCode></PostalCode>");
   });
 
-  it("returns null when UserID is not in the response", () => {
-    const responseXml = `<?xml version="1.0" encoding="utf-8"?>
-<GetUserResponse xmlns="urn:ebay:apis:eBLBaseComponents">
-  <Ack>Failure</Ack>
-  <Errors>
-    <LongMessage>Auth token is invalid</LongMessage>
-  </Errors>
-</GetUserResponse>`;
+  it("includes seller profiles, item specifics, and condition descriptors in the XML payload", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        `<?xml version="1.0" encoding="utf-8"?>
+<VerifyAddItemResponse xmlns="urn:ebay:apis:eBLBaseComponents">
+  <Ack>Success</Ack>
+</VerifyAddItemResponse>`,
+        {
+          status: 200,
+          headers: { "Content-Type": "text/xml" },
+        },
+      ),
+    );
 
-    const match = responseXml.match(/<UserID>([^<]+)<\/UserID>/);
-    expect(match).toBeNull();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await verifyAddItem(
+      buildListingData({
+        location: "Vancouver, BC",
+        postal_code: undefined,
+      }),
+      "oauth-user-token",
+    );
+
+    const [, request] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(request.body).toContain("<SellerProfiles>");
+    expect(request.body).toContain("<ShippingProfileID>ship-1</ShippingProfileID>");
+    expect(request.body).toContain("<ItemSpecifics>");
+    expect(request.body).toContain("<Name>Game</Name>");
+    expect(request.body).toContain("<Value>Pokemon TCG</Value>");
+    expect(request.body).toContain("<ConditionDescriptors>");
+    expect(request.body).toContain("<ConditionDescriptor>");
+  });
+
+  it("fails early when no seller location is provided", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      verifyAddItem(
+        buildListingData({
+          location: undefined,
+          postal_code: undefined,
+        }),
+        "oauth-user-token",
+      ),
+    ).rejects.toThrow(
+      "eBay seller location is missing. Save a location or postal code in eBay publish settings.",
+    );
+
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

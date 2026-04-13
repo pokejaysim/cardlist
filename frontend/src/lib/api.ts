@@ -1,4 +1,10 @@
-import { DEV_MODE, DEV_LISTINGS, DEV_PHOTOS, DEV_USAGE } from "./devMode";
+import {
+  DEV_MODE,
+  DEV_LISTINGS,
+  DEV_PHOTOS,
+  DEV_USAGE,
+  DEV_EBAY_PUBLISH_SETTINGS,
+} from "./devMode";
 import { useAuthStore } from "@/store/auth";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:3001/api";
@@ -46,7 +52,8 @@ function devMockResponse<T>(path: string, options?: RequestInit): T | null {
       description: null,
       price_cad: body.price_cad ?? null,
       listing_type: body.listing_type ?? "auction",
-      duration: 7,
+      duration: body.listing_type === "fixed_price" ? 30 : 7,
+      ebay_aspects: body.ebay_aspects ?? null,
       created_at: new Date().toISOString(),
       published_at: null,
       ebay_item_id: null,
@@ -109,7 +116,179 @@ function devMockResponse<T>(path: string, options?: RequestInit): T | null {
 
   // GET /account/ebay-status
   if (path === "/account/ebay-status") {
-    return { linked: false } as unknown as T;
+    return {
+      linked: DEV_EBAY_PUBLISH_SETTINGS.linked,
+      ebay_user_id: "TESTUSER_snapcard_seller",
+    } as unknown as T;
+  }
+
+  if (path === "/account/ebay-publish-settings" && method === "GET") {
+    return DEV_EBAY_PUBLISH_SETTINGS as unknown as T;
+  }
+
+  if (path === "/account/ebay-publish-settings" && method === "PUT") {
+    const body = JSON.parse((options?.body as string) ?? "{}");
+    const currentSettings = DEV_EBAY_PUBLISH_SETTINGS.settings ?? {
+      user_id: "dev-user",
+      marketplace_id: DEV_EBAY_PUBLISH_SETTINGS.marketplace_id,
+      location: null,
+      postal_code: null,
+      fulfillment_policy_id: null,
+      fulfillment_policy_name: null,
+      payment_policy_id: null,
+      payment_policy_name: null,
+      return_policy_id: null,
+      return_policy_name: null,
+      last_synced_at: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    DEV_EBAY_PUBLISH_SETTINGS.settings = {
+      ...currentSettings,
+      location: body.location ?? null,
+      postal_code: body.postal_code ?? null,
+      fulfillment_policy_id: body.fulfillment_policy_id ?? null,
+      fulfillment_policy_name:
+        DEV_EBAY_PUBLISH_SETTINGS.available_policies.fulfillment.find(
+          (policy) => policy.id === body.fulfillment_policy_id,
+        )?.name ?? null,
+      payment_policy_id: body.payment_policy_id ?? null,
+      payment_policy_name:
+        DEV_EBAY_PUBLISH_SETTINGS.available_policies.payment.find(
+          (policy) => policy.id === body.payment_policy_id,
+        )?.name ?? null,
+      return_policy_id: body.return_policy_id ?? null,
+      return_policy_name:
+        DEV_EBAY_PUBLISH_SETTINGS.available_policies.return.find(
+          (policy) => policy.id === body.return_policy_id,
+        )?.name ?? null,
+      updated_at: new Date().toISOString(),
+      last_synced_at: new Date().toISOString(),
+    };
+    DEV_EBAY_PUBLISH_SETTINGS.readiness = {
+      ready:
+        Boolean(
+          DEV_EBAY_PUBLISH_SETTINGS.settings?.location ||
+            DEV_EBAY_PUBLISH_SETTINGS.settings?.postal_code,
+        ) &&
+        Boolean(DEV_EBAY_PUBLISH_SETTINGS.settings?.fulfillment_policy_id) &&
+        Boolean(DEV_EBAY_PUBLISH_SETTINGS.settings?.payment_policy_id) &&
+        Boolean(DEV_EBAY_PUBLISH_SETTINGS.settings?.return_policy_id),
+      missing: [],
+    };
+
+    if (
+      !DEV_EBAY_PUBLISH_SETTINGS.settings?.location &&
+      !DEV_EBAY_PUBLISH_SETTINGS.settings?.postal_code
+    ) {
+      DEV_EBAY_PUBLISH_SETTINGS.readiness.missing.push(
+        "Add a seller location or postal code.",
+      );
+    }
+    if (!DEV_EBAY_PUBLISH_SETTINGS.settings?.fulfillment_policy_id) {
+      DEV_EBAY_PUBLISH_SETTINGS.readiness.missing.push(
+        "Select a default fulfillment policy.",
+      );
+    }
+    if (!DEV_EBAY_PUBLISH_SETTINGS.settings?.payment_policy_id) {
+      DEV_EBAY_PUBLISH_SETTINGS.readiness.missing.push(
+        "Select a default payment policy.",
+      );
+    }
+    if (!DEV_EBAY_PUBLISH_SETTINGS.settings?.return_policy_id) {
+      DEV_EBAY_PUBLISH_SETTINGS.readiness.missing.push(
+        "Select a default return policy.",
+      );
+    }
+
+    return DEV_EBAY_PUBLISH_SETTINGS as unknown as T;
+  }
+
+  const readinessMatch = path.match(/^\/listings\/([\w-]+)\/publish-readiness$/);
+  if (readinessMatch && method === "GET") {
+    const listing = DEV_LISTINGS.find((item) => item.id === readinessMatch[1]);
+    if (!listing) throw new Error("Listing not found");
+
+    const missing: Array<{
+      code: string;
+      message: string;
+      scope: "seller" | "listing";
+    }> = [];
+
+    for (const message of DEV_EBAY_PUBLISH_SETTINGS.readiness.missing) {
+      missing.push({
+        code: message.toLowerCase().replace(/[^a-z0-9]+/g, "_"),
+        message,
+        scope: "seller",
+      });
+    }
+
+    if (!listing.price_cad) {
+      missing.push({
+        code: "missing_price",
+        message: "Set a positive price before publishing.",
+        scope: "listing",
+      });
+    }
+
+    if (!listing.description) {
+      missing.push({
+        code: "missing_description",
+        message: "Generate or enter an eBay description before publishing.",
+        scope: "listing",
+      });
+    }
+
+    const hasPhotos = (DEV_PHOTOS[listing.id] ?? []).length > 0;
+    if (!hasPhotos) {
+      missing.push({
+        code: "missing_photos",
+        message: "Upload at least one card photo before publishing.",
+        scope: "listing",
+      });
+    }
+
+    const aspects = listing.ebay_aspects ?? {};
+    if (!("Game" in aspects)) {
+      missing.push({
+        code: "missing_aspect_game",
+        message: 'Add the required eBay field "Game".',
+        scope: "listing",
+      });
+    }
+
+    return {
+      ready: missing.length === 0,
+      missing,
+      warnings: [],
+      resolved_item_specifics: {
+        Manufacturer: ["Nintendo"],
+        ...(listing.ebay_aspects?.Game ? { Game: [String(listing.ebay_aspects.Game)] } : {}),
+      },
+      unresolved_required_aspects:
+        "Game" in aspects
+          ? []
+          : [
+              {
+                name: "Game",
+                required: true,
+                mode: "select",
+                multiple: false,
+                values: ["Pokemon TCG"],
+                value: null,
+                description: "Required by eBay for collectible card game singles.",
+              },
+            ],
+      allowed_listing_types: ["auction", "fixed_price"],
+      allowed_auction_durations: [3, 5, 7, 10],
+      current_listing_type: listing.listing_type,
+      current_duration: listing.duration,
+      display_duration:
+        listing.listing_type === "fixed_price"
+          ? "Good 'Til Cancelled"
+          : `${listing.duration} days`,
+    } as unknown as T;
   }
 
   // GET /account

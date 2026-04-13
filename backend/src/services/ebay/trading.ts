@@ -6,13 +6,30 @@ import { getEbayUrls } from "./config.js";
 // ---------------------------------------------------------------------------
 
 export interface ListingData {
+  categoryId: string;
   title: string;
   description: string;
   price_cad: number;
-  condition: string;
   photo_urls: string[];
   listing_type: "auction" | "fixed_price";
-  duration: number;
+  listing_duration: string;
+  condition_id: number;
+  item_specifics?: Array<{
+    Name: string;
+    Value: string[];
+  }>;
+  seller_profiles?: {
+    SellerShippingProfile: { ShippingProfileID: string };
+    SellerReturnProfile: { ReturnProfileID: string };
+    SellerPaymentProfile: { PaymentProfileID: string };
+  };
+  location?: string;
+  postal_code?: string;
+  condition_descriptors?: Array<{
+    Name: string;
+    Value?: string[];
+    AdditionalInfo?: string;
+  }>;
 }
 
 interface EbayFee {
@@ -45,18 +62,6 @@ const xmlParser = new XMLParser({
     return tagName === "Fee" || tagName === "Errors" || tagName === "PictureURL";
   },
 });
-
-// ---------------------------------------------------------------------------
-// Condition mapping
-// ---------------------------------------------------------------------------
-
-const CONDITION_MAP: Record<string, number> = {
-  NM: 4000,
-  LP: 5000,
-  MP: 6000,
-  HP: 7000,
-  DMG: 7000,
-};
 
 // ---------------------------------------------------------------------------
 // Core API call
@@ -120,6 +125,28 @@ export async function ebayTradingApi(
   return body;
 }
 
+export async function getEbayUserId(token: string): Promise<string> {
+  const response = await ebayTradingApi(
+    "GetUser",
+    {
+      DetailLevel: "ReturnAll",
+    },
+    token,
+  );
+
+  const user = response["User"];
+  if (!user || typeof user !== "object") {
+    throw new Error("eBay GetUser: missing User in response");
+  }
+
+  const userId = (user as Record<string, unknown>)["UserID"];
+  if (typeof userId !== "string") {
+    throw new Error("eBay GetUser: missing UserID in response");
+  }
+
+  return userId;
+}
+
 // ---------------------------------------------------------------------------
 // Upload picture
 // ---------------------------------------------------------------------------
@@ -157,44 +184,52 @@ export async function uploadSiteHostedPictures(
 // Build Item payload from ListingData
 // ---------------------------------------------------------------------------
 
-function getListingLocation(): { Location?: string; PostalCode?: string } {
-  const location = process.env.EBAY_LOCATION;
-  const postalCode = process.env.EBAY_POSTAL_CODE;
-
-  if (!location && !postalCode) {
+function buildItemPayload(listing: ListingData): Record<string, unknown> {
+  if (!listing.location && !listing.postal_code) {
     throw new Error(
-      "eBay listing location is not configured. Set EBAY_LOCATION or EBAY_POSTAL_CODE."
+      "eBay seller location is missing. Save a location or postal code in eBay publish settings.",
     );
   }
-
-  const result: { Location?: string; PostalCode?: string } = {};
-  if (location) result.Location = location;
-  if (postalCode) result.PostalCode = postalCode;
-  return result;
-}
-
-function buildItemPayload(listing: ListingData): Record<string, unknown> {
-  const conditionId = CONDITION_MAP[listing.condition] ?? 4000;
-  const locationFields = getListingLocation();
 
   return {
     Item: {
       Title: listing.title,
       Description: { __cdata: listing.description },
       PrimaryCategory: {
-        CategoryID: "183454",
+        CategoryID: listing.categoryId,
       },
       StartPrice: listing.price_cad,
       Currency: "CAD",
       Country: "CA",
-      ...locationFields,
+      ...(listing.location ? { Location: listing.location } : {}),
+      ...(listing.postal_code ? { PostalCode: listing.postal_code } : {}),
       ListingType:
         listing.listing_type === "auction" ? "Chinese" : "FixedPriceItem",
-      ListingDuration: `Days_${String(listing.duration)}`,
+      ListingDuration: listing.listing_duration,
       PictureDetails: {
         PictureURL: listing.photo_urls,
       },
-      ConditionID: conditionId,
+      ConditionID: listing.condition_id,
+      ...(listing.condition_descriptors &&
+      listing.condition_descriptors.length > 0
+        ? {
+            ConditionDescriptors: {
+              ConditionDescriptor: listing.condition_descriptors,
+            },
+          }
+        : {}),
+      ...(listing.item_specifics && listing.item_specifics.length > 0
+        ? {
+            ItemSpecifics: {
+              NameValueList: listing.item_specifics,
+            },
+          }
+        : {}),
+      ...(listing.seller_profiles
+        ? {
+            SellerProfiles: listing.seller_profiles,
+          }
+        : {}),
       Site: "Canada",
       DispatchTimeMax: 3,
     },

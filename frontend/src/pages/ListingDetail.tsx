@@ -19,8 +19,10 @@ import {
   ImageIcon,
   Upload,
   Link,
+  Settings2,
 } from "lucide-react";
-import { useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { EbayPublishReadiness } from "../../../shared/types";
 
 interface Listing {
   id: string;
@@ -43,6 +45,7 @@ interface Listing {
   ebay_error: string | null;
   created_at: string;
   published_at: string | null;
+  ebay_aspects: Record<string, string | string[]> | null;
 }
 
 interface Photo {
@@ -60,6 +63,8 @@ const statusColors: Record<string, "default" | "secondary" | "destructive" | "ou
 };
 
 const CONDITIONS = ["NM", "LP", "MP", "HP", "DMG"] as const;
+const SELECT_CLASS_NAME =
+  "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50";
 
 export default function ListingDetail() {
   const { id } = useParams<{ id: string }>();
@@ -69,11 +74,15 @@ export default function ListingDetail() {
   const [deleting, setDeleting] = useState(false);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savingAspects, setSavingAspects] = useState(false);
   const [error, setError] = useState("");
 
   const [uploading, setUploading] = useState(false);
   const [mockPublished, setMockPublished] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [aspectFields, setAspectFields] = useState<
+    Record<string, string | string[]>
+  >({});
 
   // Edit form state
   const [editFields, setEditFields] = useState<Record<string, string | number | null>>({});
@@ -94,6 +103,30 @@ export default function ListingDetail() {
     queryKey: ["ebay-status"],
     queryFn: () => apiFetch<{ linked: boolean; ebay_user_id?: string; mock?: boolean }>("/account/ebay-status"),
   });
+
+  const { data: readiness, error: readinessError, isLoading: readinessLoading } = useQuery({
+    queryKey: ["publish-readiness", id],
+    queryFn: () => apiFetch<EbayPublishReadiness>(`/listings/${id}/publish-readiness`),
+    enabled: !!id && !!ebayStatus?.linked && (listing?.status === "draft" || listing?.status === "error"),
+  });
+
+  useEffect(() => {
+    if (!readiness) {
+      return;
+    }
+
+    const nextValues: Record<string, string | string[]> = {};
+    for (const field of readiness.unresolved_required_aspects) {
+      if (Array.isArray(field.value)) {
+        nextValues[field.name] = field.value;
+      } else if (typeof field.value === "string") {
+        nextValues[field.name] = field.value;
+      } else {
+        nextValues[field.name] = field.multiple ? [] : "";
+      }
+    }
+    setAspectFields(nextValues);
+  }, [readiness]);
 
   function startEditing() {
     if (!listing) return;
@@ -135,6 +168,7 @@ export default function ListingDetail() {
       });
       await queryClient.invalidateQueries({ queryKey: ["listing", id] });
       await queryClient.invalidateQueries({ queryKey: ["listings"] });
+      await queryClient.invalidateQueries({ queryKey: ["publish-readiness", id] });
       setEditing(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save changes");
@@ -155,6 +189,7 @@ export default function ListingDetail() {
       }
       await queryClient.invalidateQueries({ queryKey: ["listing", id] });
       await queryClient.invalidateQueries({ queryKey: ["listings"] });
+      await queryClient.invalidateQueries({ queryKey: ["publish-readiness", id] });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to publish");
     } finally {
@@ -184,6 +219,62 @@ export default function ListingDetail() {
       window.location.href = url;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to get eBay authorization URL");
+    }
+  }
+
+  function updateAspectField(name: string, value: string | string[]) {
+    setAspectFields((current) => ({
+      ...current,
+      [name]: value,
+    }));
+  }
+
+  async function handleSaveEbayDetails() {
+    if (!id || !listing) return;
+
+    setSavingAspects(true);
+    setError("");
+
+    try {
+      const mergedAspects: Record<string, string | string[]> = {
+        ...(listing.ebay_aspects ?? {}),
+      };
+
+      for (const [name, value] of Object.entries(aspectFields)) {
+        if (Array.isArray(value)) {
+          const cleaned = value.map((entry) => entry.trim()).filter(Boolean);
+          if (cleaned.length > 0) {
+            mergedAspects[name] = cleaned;
+          } else {
+            delete mergedAspects[name];
+          }
+          continue;
+        }
+
+        const cleaned = value.trim();
+        if (cleaned) {
+          mergedAspects[name] = cleaned;
+        } else {
+          delete mergedAspects[name];
+        }
+      }
+
+      await apiFetch(`/listings/${id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          ebay_aspects: mergedAspects,
+        }),
+      });
+
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["listing", id] }),
+        queryClient.invalidateQueries({ queryKey: ["listings"] }),
+        queryClient.invalidateQueries({ queryKey: ["publish-readiness", id] }),
+      ]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save eBay details");
+    } finally {
+      setSavingAspects(false);
     }
   }
 
@@ -256,6 +347,20 @@ export default function ListingDetail() {
   const isDraft = listing.status === "draft";
   const isError = listing.status === "error";
   const isMockListing = mockPublished || (listing.ebay_item_id != null && String(listing.ebay_item_id).startsWith("MOCK-"));
+  const sellerMissing = readiness?.missing.filter((item) => item.scope === "seller") ?? [];
+  const listingMissing = readiness?.missing.filter((item) => item.scope === "listing") ?? [];
+  const publishBlocked =
+    publishing ||
+    !ebayStatus?.linked ||
+    readinessLoading ||
+    ((isDraft || isError) && ebayStatus?.linked && readiness?.ready === false);
+  const publishLabel = publishing
+    ? "Validating..."
+    : readinessLoading
+      ? "Checking readiness..."
+      : readiness && !readiness.ready
+        ? "Complete setup to publish"
+        : "Publish to eBay";
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8">
@@ -289,6 +394,221 @@ export default function ListingDetail() {
             <p>{listing.ebay_error}</p>
           </div>
         </div>
+      )}
+
+      {(isDraft || isError) && ebayStatus?.linked && (
+        <Card className="mb-4 border-primary/15">
+          <CardHeader>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <CardTitle className="text-base">Publish Readiness</CardTitle>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  SnapCard is checking your listing against the current eBay rules before you publish.
+                </p>
+              </div>
+              {readiness?.ready ? (
+                <div className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+                  Ready
+                </div>
+              ) : (
+                <div className="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-900">
+                  Action needed
+                </div>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {readinessLoading && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="size-4 animate-spin" />
+                Checking eBay requirements...
+              </div>
+            )}
+
+            {readinessError && (
+              <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
+                {readinessError instanceof Error
+                  ? readinessError.message
+                  : "Failed to load eBay publish readiness."}
+              </div>
+            )}
+
+            {readiness && !readiness.ready && (
+              <div className="space-y-4">
+                {sellerMissing.length > 0 && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+                    <p className="font-medium">Seller defaults to finish</p>
+                    <ul className="mt-2 space-y-1 pl-5 text-amber-900">
+                      {sellerMissing.map((item) => (
+                        <li key={item.code} className="list-disc">
+                          {item.message}
+                        </li>
+                      ))}
+                    </ul>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="mt-3"
+                      onClick={() => navigate("/account")}
+                    >
+                      <Settings2 className="mr-1.5 size-4" />
+                      Open eBay setup
+                    </Button>
+                  </div>
+                )}
+
+                {listingMissing.length > 0 && (
+                  <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm">
+                    <p className="font-medium">Listing details still needed</p>
+                    <ul className="mt-2 space-y-1 pl-5 text-muted-foreground">
+                      {listingMissing.map((item) => (
+                        <li key={item.code} className="list-disc">
+                          {item.message}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {readiness.unresolved_required_aspects.length > 0 && (
+                  <div className="space-y-4 rounded-lg border p-4">
+                    <div>
+                      <p className="font-medium">Missing eBay fields</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        These are the only extra fields eBay still needs for this card.
+                      </p>
+                    </div>
+
+                    <div className="grid gap-4">
+                      {readiness.unresolved_required_aspects.map((field) => (
+                        <div key={field.name} className="space-y-2">
+                          <label className="text-sm font-medium">{field.name}</label>
+                          {field.mode === "select" ? (
+                            field.multiple ? (
+                              <select
+                                multiple
+                                className={`${SELECT_CLASS_NAME} min-h-28`}
+                                value={
+                                  Array.isArray(aspectFields[field.name])
+                                    ? (aspectFields[field.name] as string[])
+                                    : []
+                                }
+                                onChange={(event) =>
+                                  updateAspectField(
+                                    field.name,
+                                    Array.from(event.target.selectedOptions).map(
+                                      (option) => option.value,
+                                    ),
+                                  )
+                                }
+                              >
+                                {field.values.map((value) => (
+                                  <option key={value} value={value}>
+                                    {value}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              <select
+                                className={SELECT_CLASS_NAME}
+                                value={
+                                  typeof aspectFields[field.name] === "string"
+                                    ? (aspectFields[field.name] as string)
+                                    : ""
+                                }
+                                onChange={(event) =>
+                                  updateAspectField(field.name, event.target.value)
+                                }
+                              >
+                                <option value="">Select {field.name}</option>
+                                {field.values.map((value) => (
+                                  <option key={value} value={value}>
+                                    {value}
+                                  </option>
+                                ))}
+                              </select>
+                            )
+                          ) : (
+                            <Input
+                              value={
+                                Array.isArray(aspectFields[field.name])
+                                  ? (aspectFields[field.name] as string[]).join(", ")
+                                  : ((aspectFields[field.name] as string) ?? "")
+                              }
+                              onChange={(event) =>
+                                updateAspectField(
+                                  field.name,
+                                  field.multiple
+                                    ? event.target.value
+                                        .split(",")
+                                        .map((entry) => entry.trim())
+                                        .filter(Boolean)
+                                    : event.target.value,
+                                )
+                              }
+                              placeholder={
+                                field.multiple
+                                  ? "Enter comma-separated values"
+                                  : `Enter ${field.name.toLowerCase()}`
+                              }
+                            />
+                          )}
+                          {field.description && (
+                            <p className="text-xs text-muted-foreground">
+                              {field.description}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    <Button
+                      type="button"
+                      onClick={handleSaveEbayDetails}
+                      disabled={savingAspects}
+                    >
+                      {savingAspects ? (
+                        <Loader2 className="mr-1.5 size-4 animate-spin" />
+                      ) : (
+                        <Check className="mr-1.5 size-4" />
+                      )}
+                      Save eBay details
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {readiness?.warnings.length ? (
+              <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm">
+                <p className="font-medium">Warnings</p>
+                <ul className="mt-2 space-y-1 pl-5 text-muted-foreground">
+                  {readiness.warnings.map((warning) => (
+                    <li key={warning} className="list-disc">
+                      {warning}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
+            {readiness && Object.keys(readiness.resolved_item_specifics).length > 0 && (
+              <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm">
+                <p className="font-medium">Auto-filled for eBay</p>
+                <div className="mt-2 grid gap-2 md:grid-cols-2">
+                  {Object.entries(readiness.resolved_item_specifics).map(
+                    ([name, values]) => (
+                      <div key={name}>
+                        <p className="text-muted-foreground">{name}</p>
+                        <p className="font-medium">{values.join(", ")}</p>
+                      </div>
+                    ),
+                  )}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       {isMockListing && listing.status === "published" && (
@@ -556,7 +876,12 @@ export default function ListingDetail() {
                 </div>
                 <div>
                   <p className="text-muted-foreground">Duration</p>
-                  <p className="font-medium">{listing.duration} days</p>
+                  <p className="font-medium">
+                    {readiness?.display_duration ??
+                      (listing.listing_type === "fixed_price"
+                        ? "Good 'Til Cancelled"
+                        : `${listing.duration} days`)}
+                  </p>
                 </div>
               </div>
             </>
@@ -601,15 +926,15 @@ export default function ListingDetail() {
           <>
             <Button
               onClick={handlePublish}
-              disabled={publishing || !ebayStatus?.linked}
+              disabled={publishBlocked}
               className="flex-1"
             >
-              {publishing ? (
+              {publishing || readinessLoading ? (
                 <Loader2 className="mr-1.5 size-4 animate-spin" />
               ) : (
                 <Send className="mr-1.5 size-4" />
               )}
-              {publishing ? "Validating..." : "Publish to eBay"}
+              {publishLabel}
             </Button>
             <Button
               variant="destructive"
@@ -640,16 +965,16 @@ export default function ListingDetail() {
           <>
             <Button
               onClick={handlePublish}
-              disabled={publishing || !ebayStatus?.linked}
+              disabled={publishBlocked}
               variant="outline"
               className="flex-1"
             >
-              {publishing ? (
+              {publishing || readinessLoading ? (
                 <Loader2 className="mr-1.5 size-4 animate-spin" />
               ) : (
                 <Send className="mr-1.5 size-4" />
               )}
-              Retry Publish
+              {publishLabel === "Publish to eBay" ? "Retry Publish" : publishLabel}
             </Button>
             <Button variant="outline" onClick={startEditing}>
               <Pencil className="mr-1.5 size-4" />

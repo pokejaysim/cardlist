@@ -3,8 +3,8 @@ import {
   uploadSiteHostedPictures,
   addItem,
 } from "../services/ebay/trading.js";
-import type { ListingData } from "../services/ebay/trading.js";
 import { getValidEbayToken } from "../services/ebay/tokenManager.js";
+import { prepareListingForPublish } from "../services/ebay/readiness.js";
 
 // ---------------------------------------------------------------------------
 // Types for DB rows (minimal shape needed by this job)
@@ -13,12 +13,6 @@ import { getValidEbayToken } from "../services/ebay/tokenManager.js";
 interface ListingRow {
   id: string;
   user_id: string;
-  title: string;
-  description: string;
-  price_cad: number;
-  condition: string;
-  listing_type: "auction" | "fixed_price";
-  duration: number;
   status: string;
 }
 
@@ -95,17 +89,12 @@ export async function processPublishJob(jobData: {
       .map((p) => p.ebay_url)
       .filter((url): url is string => url != null);
 
-    // 5. Build listing data and call AddItem
-    const listingData: ListingData = {
-      title: listingRow.title,
-      description: listingRow.description,
-      price_cad: listingRow.price_cad,
-      condition: listingRow.condition,
-      photo_urls: ebayPhotoUrls,
-      listing_type: listingRow.listing_type,
-      duration: listingRow.duration,
-    };
-
+    // 5. Build the metadata-validated payload and call AddItem
+    const listingData = await prepareListingForPublish(
+      listingId,
+      listingRow.user_id,
+      ebayPhotoUrls,
+    );
     const { itemId } = await addItem(listingData, token);
 
     // 6. Update listing as published

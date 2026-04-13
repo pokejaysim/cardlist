@@ -9,6 +9,7 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { apiFetch } from "@/lib/api";
+import { EbayPublishSetupCard } from "@/components/EbayPublishSetupCard";
 import {
   CheckCircle2,
   ExternalLink,
@@ -24,6 +25,7 @@ export default function Onboarding() {
   const [step, setStep] = useState<Step>("welcome");
   const [linking, setLinking] = useState(false);
   const [ebayLinked, setEbayLinked] = useState(false);
+  const [settingsReady, setSettingsReady] = useState(false);
   const [error, setError] = useState("");
 
   // Check if returning from eBay OAuth or if eBay is already linked
@@ -160,9 +162,18 @@ export default function Onboarding() {
               )}
 
               {ebayLinked ? (
-                <div className="flex items-center gap-2 rounded-lg bg-primary/10 p-3 text-sm font-medium text-primary">
-                  <CheckCircle2 className="size-4" />
-                  eBay account linked successfully!
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 rounded-lg bg-primary/10 p-3 text-sm font-medium text-primary">
+                    <CheckCircle2 className="size-4" />
+                    eBay account linked successfully!
+                  </div>
+                  <EbayPublishSetupCard
+                    title="Finish Your eBay Defaults"
+                    description="Pick your shipping, payment, and return defaults once so publish stays fast later."
+                    onStateChange={(state) =>
+                      setSettingsReady(Boolean(state?.readiness.ready))
+                    }
+                  />
                 </div>
               ) : (
                 <Button
@@ -185,11 +196,11 @@ export default function Onboarding() {
                   className="flex-1"
                   onClick={() => setStep("ready")}
                 >
-                  Skip for now
+                  {settingsReady ? "Skip for now" : "Finish later"}
                 </Button>
                 {ebayLinked && (
                   <Button className="flex-1" onClick={() => setStep("ready")}>
-                    Continue
+                    {settingsReady ? "Continue" : "Continue anyway"}
                     <ArrowRight className="ml-1.5 size-4" />
                   </Button>
                 )}
@@ -214,8 +225,8 @@ export default function Onboarding() {
                   <li>
                     Enter card details manually, or let AI identify it (Pro)
                   </li>
-                  <li>Set your price and review the listing</li>
-                  <li>Publish to eBay</li>
+                  <li>Set your price and review the readiness checklist</li>
+                  <li>Publish to eBay once the checklist is clear</li>
                 </ol>
               </div>
               <Button

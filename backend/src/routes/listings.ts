@@ -5,12 +5,61 @@ import { supabase } from "../lib/supabase.js";
 import { generateTitle } from "../services/titleGenerator.js";
 import { generateDescription } from "../services/descriptionGenerator.js";
 import { schedulePublish } from "../services/ebay/publish.js";
+import { getPublishReadiness } from "../services/ebay/readiness.js";
 import { uploadPhoto } from "../services/storage.js";
 import { PLAN_LIMITS, type PlanName } from "../lib/plans.js";
 import { isMockMode } from "../services/ebay/config.js";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+
+function sanitizeEbayAspects(
+  input: unknown,
+): Record<string, string | string[]> | null {
+  if (input == null || typeof input !== "object" || Array.isArray(input)) {
+    return null;
+  }
+
+  const normalized: Record<string, string | string[]> = {};
+
+  for (const [key, value] of Object.entries(input)) {
+    const name = key.trim();
+    if (!name) continue;
+
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (trimmed) normalized[name] = trimmed;
+      continue;
+    }
+
+    if (Array.isArray(value)) {
+      const values = value
+        .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
+        .filter(Boolean);
+
+      if (values.length > 0) {
+        normalized[name] = values;
+      }
+    }
+  }
+
+  return Object.keys(normalized).length > 0 ? normalized : {};
+}
+
+function normalizeListingDuration(
+  listingType: unknown,
+  duration: unknown,
+): number {
+  if (listingType === "fixed_price") {
+    return 30;
+  }
+
+  if (typeof duration === "number" && Number.isFinite(duration) && duration > 0) {
+    return Math.round(duration);
+  }
+
+  return 7;
+}
 
 // ── Create draft listing ───────────────────────────────
 
@@ -31,6 +80,7 @@ router.post("/listings", requireAuth, async (req, res) => {
     listing_type?: string;
     duration?: number;
     price_cad?: number;
+    ebay_aspects?: Record<string, string | string[]>;
   };
 
   if (!body.card_name) {
@@ -130,8 +180,12 @@ router.post("/listings", requireAuth, async (req, res) => {
       grade: body.grade ?? null,
       identified_by: body.identified_by ?? "manual",
       listing_type: body.listing_type ?? "auction",
-      duration: body.duration ?? 7,
+      duration: normalizeListingDuration(
+        body.listing_type ?? "auction",
+        body.duration,
+      ),
       price_cad: body.price_cad ?? null,
+      ebay_aspects: sanitizeEbayAspects(body.ebay_aspects),
       photo_urls: [],
     })
     .select()
@@ -167,6 +221,25 @@ router.get("/listings", requireAuth, async (req, res) => {
 
 // ── Get single listing ─────────────────────────────────
 
+router.get("/listings/:id/publish-readiness", requireAuth, async (req, res) => {
+  const authReq = req as AuthenticatedRequest;
+  const listingId = req.params.id as string;
+
+  try {
+    const readiness = await getPublishReadiness(listingId, authReq.userId);
+    res.json(readiness);
+  } catch (error) {
+    console.error("Failed to load publish readiness:", error);
+    res.status(400).json({
+      error:
+        error instanceof Error
+          ? error.message
+          : "Failed to load publish readiness",
+      code: "PUBLISH_READINESS_ERROR",
+    });
+  }
+});
+
 router.get("/listings/:id", requireAuth, async (req, res) => {
   const authReq = req as AuthenticatedRequest;
 
@@ -194,7 +267,7 @@ router.put("/listings/:id", requireAuth, async (req, res) => {
   // Only allow updating drafts
   const { data: existing } = await supabase
     .from("listings")
-    .select("status")
+    .select("status, listing_type, duration")
     .eq("id", req.params.id)
     .eq("user_id", authReq.userId)
     .single();
@@ -214,6 +287,17 @@ router.put("/listings/:id", requireAuth, async (req, res) => {
   const hasCardChanges = cardFields.some((f) => f in body);
 
   const updates: Record<string, unknown> = { ...body };
+
+  if ("ebay_aspects" in body) {
+    updates.ebay_aspects = sanitizeEbayAspects(body.ebay_aspects);
+  }
+
+  if ("listing_type" in body || "duration" in body) {
+    updates.duration = normalizeListingDuration(
+      body.listing_type ?? existing.listing_type,
+      body.duration ?? existing.duration,
+    );
+  }
 
   if (hasCardChanges && typeof body.card_name === "string") {
     updates.title = generateTitle({
@@ -482,7 +566,18 @@ router.post("/listings/:id/publish", requireAuth, async (req, res) => {
   const result = await schedulePublish(listingId, authReq.userId);
 
   if (!result.scheduled) {
-    res.status(400).json({ error: result.error ?? "Failed to schedule publish", code: "PUBLISH_ERROR" });
+    let readiness = null;
+    try {
+      readiness = await getPublishReadiness(listingId, authReq.userId);
+    } catch {
+      readiness = null;
+    }
+
+    res.status(400).json({
+      error: result.error ?? "Failed to schedule publish",
+      code: "PUBLISH_ERROR",
+      readiness,
+    });
     return;
   }
 

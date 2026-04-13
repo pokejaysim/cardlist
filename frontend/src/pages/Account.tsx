@@ -10,6 +10,7 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { apiFetch } from "@/lib/api";
+import { EbayPublishSetupCard } from "@/components/EbayPublishSetupCard";
 import {
   ExternalLink,
   CheckCircle2,
@@ -169,6 +170,12 @@ export default function Account() {
           )}
         </CardContent>
       </Card>
+
+      {ebayStatus?.linked && (
+        <div className="mt-4">
+          <EbayPublishSetupCard />
+        </div>
+      )}
     </div>
   );
 }

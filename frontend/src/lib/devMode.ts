@@ -2,6 +2,8 @@
 // Enable via VITE_DEV_MODE=true in .env to bypass auth and use mock data.
 // When unset or "false", the app connects to real Supabase + backend.
 
+import type { EbayPublishSettingsResponse } from "../../../shared/types";
+
 export const DEV_MODE = import.meta.env.VITE_DEV_MODE === "true";
 
 export const DEV_USER = {
@@ -40,6 +42,7 @@ interface DevListing {
   price_cad: number | null;
   listing_type: string;
   duration: number;
+  ebay_aspects: Record<string, string | string[]> | null;
   created_at: string;
   published_at: string | null;
   ebay_item_id: number | null;
@@ -67,6 +70,10 @@ export const DEV_LISTINGS: DevListing[] = [
     price_cad: 450.0,
     listing_type: "auction",
     duration: 7,
+    ebay_aspects: {
+      Game: "Pokemon TCG",
+      Manufacturer: "Nintendo",
+    },
     created_at: new Date(Date.now() - 7 * 86400000).toISOString(),
     published_at: new Date(Date.now() - 6 * 86400000).toISOString(),
     ebay_item_id: 1234567890,
@@ -91,6 +98,9 @@ export const DEV_LISTINGS: DevListing[] = [
     price_cad: 85.0,
     listing_type: "fixed_price",
     duration: 30,
+    ebay_aspects: {
+      Game: "Pokemon TCG",
+    },
     created_at: new Date(Date.now() - 2 * 86400000).toISOString(),
     published_at: null,
     ebay_item_id: null,
@@ -115,6 +125,7 @@ export const DEV_LISTINGS: DevListing[] = [
     price_cad: null,
     listing_type: "auction",
     duration: 7,
+    ebay_aspects: null,
     created_at: new Date(Date.now() - 86400000).toISOString(),
     published_at: null,
     ebay_item_id: null,
@@ -139,6 +150,9 @@ export const DEV_LISTINGS: DevListing[] = [
     price_cad: 25.0,
     listing_type: "fixed_price",
     duration: 30,
+    ebay_aspects: {
+      Game: "Pokemon TCG",
+    },
     created_at: new Date().toISOString(),
     published_at: null,
     ebay_item_id: null,
@@ -163,6 +177,10 @@ export const DEV_LISTINGS: DevListing[] = [
     price_cad: 15000.0,
     listing_type: "fixed_price",
     duration: 30,
+    ebay_aspects: {
+      Game: "Pokemon TCG",
+      Grader: "PSA",
+    },
     created_at: new Date(Date.now() - 3 * 86400000).toISOString(),
     published_at: null,
     ebay_item_id: null,
@@ -187,6 +205,10 @@ export const DEV_LISTINGS: DevListing[] = [
     price_cad: 350.0,
     listing_type: "auction",
     duration: 7,
+    ebay_aspects: {
+      Game: "Pokemon TCG",
+      Grader: "BGS",
+    },
     created_at: new Date(Date.now() - 5 * 86400000).toISOString(),
     published_at: new Date(Date.now() - 4 * 86400000).toISOString(),
     ebay_item_id: 9876543210,
@@ -217,4 +239,39 @@ export const DEV_PHOTOS: Record<string, { id: string; file_url: string; ebay_url
     { id: "photo-6a", file_url: "https://placehold.co/400x560/1a2e1a/ffffff?text=Pikachu+BGS+Front", ebay_url: null, position: 0 },
     { id: "photo-6b", file_url: "https://placehold.co/400x560/1a2e1a/ffffff?text=BGS+Label", ebay_url: null, position: 1 },
   ],
+};
+
+export const DEV_EBAY_PUBLISH_SETTINGS: EbayPublishSettingsResponse = {
+  linked: true,
+  marketplace_id: "EBAY_CA",
+  settings: {
+    user_id: DEV_USER.id,
+    marketplace_id: "EBAY_CA",
+    location: "Vancouver, BC",
+    postal_code: "V5V 1A1",
+    fulfillment_policy_id: "ship-standard",
+    fulfillment_policy_name: "Standard tracked shipping",
+    payment_policy_id: "pay-default",
+    payment_policy_name: "Managed Payments",
+    return_policy_id: "",
+    return_policy_name: null,
+    last_synced_at: new Date().toISOString(),
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+  available_policies: {
+    fulfillment: [
+      { id: "ship-standard", name: "Standard tracked shipping", marketplace_id: "EBAY_CA" },
+    ],
+    payment: [
+      { id: "pay-default", name: "Managed Payments", marketplace_id: "EBAY_CA" },
+    ],
+    return: [
+      { id: "returns-30", name: "30 day returns", marketplace_id: "EBAY_CA" },
+    ],
+  },
+  readiness: {
+    ready: false,
+    missing: ["Select a default return policy."],
+  },
 };

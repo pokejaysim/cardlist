@@ -12,3 +12,28 @@ export function getEbayUrls() {
 export function isMockMode(): boolean {
   return process.env.EBAY_MOCK_MODE === "true" || !process.env.EBAY_APP_ID;
 }
+
+export function getEbayMarketplaceId(): string {
+  if (process.env.EBAY_MARKETPLACE_ID) {
+    return process.env.EBAY_MARKETPLACE_ID;
+  }
+
+  const siteId = process.env.EBAY_SITE_ID ?? "2";
+
+  switch (siteId) {
+    case "0":
+      return "EBAY_US";
+    case "2":
+      return "EBAY_CA";
+    case "3":
+      return "EBAY_GB";
+    case "15":
+      return "EBAY_AU";
+    default:
+      return "EBAY_CA";
+  }
+}
+
+export function getTradingCardCategoryId(): string {
+  return process.env.EBAY_TRADING_CARD_CATEGORY_ID ?? "183454";
+}

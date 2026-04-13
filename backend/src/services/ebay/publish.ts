@@ -1,9 +1,9 @@
 import { supabase } from "../../lib/supabase.js";
 import { publishQueue } from "../../lib/queue.js";
 import { verifyAddItem } from "./trading.js";
-import type { ListingData } from "./trading.js";
 import { getValidEbayToken } from "./tokenManager.js";
 import { isMockMode } from "./config.js";
+import { prepareListingForPublish } from "./readiness.js";
 
 // ---------------------------------------------------------------------------
 // Types for DB rows (minimal shape needed here)
@@ -12,12 +12,6 @@ import { isMockMode } from "./config.js";
 interface ListingRow {
   id: string;
   user_id: string;
-  title: string;
-  description: string;
-  price_cad: number;
-  condition: string;
-  listing_type: "auction" | "fixed_price";
-  duration: number;
   status: string;
 }
 
@@ -60,20 +54,6 @@ export async function schedulePublish(
     };
   }
 
-  if (!listingRow.price_cad || listingRow.price_cad <= 0) {
-    return {
-      scheduled: false,
-      error: "Price must be set before publishing. Go back and set a price.",
-    };
-  }
-
-  if (!listingRow.title) {
-    return {
-      scheduled: false,
-      error: "Listing title is missing. Please edit the listing and add a title.",
-    };
-  }
-
   // 2. Verify the user has a linked eBay account
   const { data: ebayAccount, error: ebayErr } = await supabase
     .from("ebay_accounts")
@@ -103,18 +83,12 @@ export async function schedulePublish(
     .map((p) => p.ebay_url ?? p.file_url)
     .filter((url): url is string => url != null);
 
-  // 5. Run VerifyAddItem as a dry-run validation
-  const listingData: ListingData = {
-    title: listingRow.title,
-    description: listingRow.description,
-    price_cad: listingRow.price_cad,
-    condition: listingRow.condition,
-    photo_urls: photoUrls,
-    listing_type: listingRow.listing_type,
-    duration: listingRow.duration,
-  };
-
   try {
+    const listingData = await prepareListingForPublish(
+      listingId,
+      userId,
+      photoUrls,
+    );
     const { warnings } = await verifyAddItem(listingData, token);
 
     // Log warnings but don't block on them

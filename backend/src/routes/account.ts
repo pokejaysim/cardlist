@@ -2,6 +2,10 @@ import { Router } from "express";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/auth.js";
 import { supabase } from "../lib/supabase.js";
 import { PLAN_LIMITS, type PlanName } from "../lib/plans.js";
+import {
+  getEbayPublishSettingsState,
+  saveEbayPublishSettings,
+} from "../services/ebay/sellerSettings.js";
 
 const router = Router();
 
@@ -150,6 +154,68 @@ router.get("/account/ebay-status", requireAuth, async (req, res) => {
     linked_at: data.created_at,
     refreshed_at: data.refreshed_at,
   });
+});
+
+// ── Get eBay publish settings ─────────────────────────
+
+router.get("/account/ebay-publish-settings", requireAuth, async (req, res) => {
+  const authReq = req as AuthenticatedRequest;
+
+  try {
+    const settings = await getEbayPublishSettingsState(authReq.userId);
+    res.json(settings);
+  } catch (error) {
+    console.error("Failed to load eBay publish settings:", error);
+    res.status(500).json({
+      error:
+        error instanceof Error
+          ? error.message
+          : "Failed to load eBay publish settings",
+      code: "EBAY_SETTINGS_ERROR",
+    });
+  }
+});
+
+// ── Save eBay publish settings ────────────────────────
+
+router.put("/account/ebay-publish-settings", requireAuth, async (req, res) => {
+  const authReq = req as AuthenticatedRequest;
+  const {
+    location,
+    postal_code,
+    fulfillment_policy_id,
+    payment_policy_id,
+    return_policy_id,
+    marketplace_id,
+  } = req.body as {
+    location?: string | null;
+    postal_code?: string | null;
+    fulfillment_policy_id?: string | null;
+    payment_policy_id?: string | null;
+    return_policy_id?: string | null;
+    marketplace_id?: string | null;
+  };
+
+  try {
+    const settings = await saveEbayPublishSettings(authReq.userId, {
+      location,
+      postal_code,
+      fulfillment_policy_id,
+      payment_policy_id,
+      return_policy_id,
+      marketplace_id,
+    });
+    res.json(settings);
+  } catch (error) {
+    console.error("Failed to save eBay publish settings:", error);
+    res.status(400).json({
+      error:
+        error instanceof Error
+          ? error.message
+          : "Failed to save eBay publish settings",
+      code: "EBAY_SETTINGS_SAVE_ERROR",
+    });
+  }
 });
 
 // ── Marketplace Account Deletion Notification ─────────

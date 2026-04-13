@@ -21,6 +21,70 @@ export interface EbayAccount {
   refreshed_at: string | null;
 }
 
+export interface EbayBusinessPolicy {
+  id: string;
+  name: string;
+  marketplace_id: string;
+}
+
+export interface EbaySellerSettings {
+  user_id: string;
+  marketplace_id: string;
+  location: string | null;
+  postal_code: string | null;
+  fulfillment_policy_id: string | null;
+  fulfillment_policy_name: string | null;
+  payment_policy_id: string | null;
+  payment_policy_name: string | null;
+  return_policy_id: string | null;
+  return_policy_name: string | null;
+  last_synced_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EbayPublishSettingsResponse {
+  linked: boolean;
+  marketplace_id: string;
+  settings: EbaySellerSettings | null;
+  available_policies: {
+    fulfillment: EbayBusinessPolicy[];
+    payment: EbayBusinessPolicy[];
+    return: EbayBusinessPolicy[];
+  };
+  readiness: {
+    ready: boolean;
+    missing: string[];
+  };
+}
+
+export interface EbayAspectField {
+  name: string;
+  required: boolean;
+  mode: "select" | "text";
+  multiple: boolean;
+  values: string[];
+  value: string | string[] | null;
+  description: string | null;
+}
+
+export interface EbayPublishReadiness {
+  ready: boolean;
+  missing: Array<{
+    code: string;
+    message: string;
+    scope: "seller" | "listing";
+  }>;
+  warnings: string[];
+  resolved_item_specifics: Record<string, string[]>;
+  unresolved_required_aspects: EbayAspectField[];
+  allowed_listing_types: ListingType[];
+  allowed_auction_durations: number[];
+  current_listing_type: ListingType;
+  current_duration: number;
+  display_duration: string;
+}
+
 // ── Listings ───────────────────────────────────────────
 
 export type ListingStatus = "draft" | "scheduled" | "published" | "error";
@@ -55,6 +119,7 @@ export interface Listing {
   price_cad: number | null;
   listing_type: ListingType;
   duration: number;
+  ebay_aspects: Record<string, string | string[]> | null;
 
   // Photos
   photo_urls: string[];

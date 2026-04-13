@@ -3,6 +3,7 @@ import { supabase } from "../lib/supabase.js";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/auth.js";
 import { sendWelcomeEmail } from "../services/email.js";
 import { getEbayUrls, isMockMode } from "../services/ebay/config.js";
+import { getEbayUserId } from "../services/ebay/trading.js";
 
 const router = Router();
 
@@ -212,14 +213,15 @@ router.post("/auth/ebay-callback", requireAuth, async (req, res) => {
     token_type?: string;
   };
 
-  // Get eBay user ID via Trading API GetUser call (using OAuth header)
   let ebayUserId: string;
   try {
-    ebayUserId = await fetchEbayUserId(tokenData.access_token);
+    ebayUserId = await getEbayUserId(tokenData.access_token);
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Unknown error";
-    console.error("eBay GetUser validation failed:", msg);
-    res.status(400).json({ error: `eBay account validation failed: ${msg}`, code: "EBAY_AUTH_ERROR" });
+    console.error("eBay account validation failed:", err);
+    res.status(502).json({
+      error: "Failed to validate linked eBay account",
+      code: "EBAY_ACCOUNT_VALIDATION_ERROR",
+    });
     return;
   }
 
@@ -255,39 +257,5 @@ router.post("/auth/ebay-callback", requireAuth, async (req, res) => {
     ebay_user_id: ebayUserId,
   });
 });
-
-// ── Helper: fetch eBay user ID ─────────────────────────
-
-async function fetchEbayUserId(token: string): Promise<string> {
-  const siteId = process.env.EBAY_SITE_ID ?? "2";
-  const { apiBase } = getEbayUrls();
-
-  const xml = `<?xml version="1.0" encoding="utf-8"?>
-<GetUserRequest xmlns="urn:ebay:apis:eBLBaseComponents">
-</GetUserRequest>`;
-
-  const res = await fetch(`${apiBase}/ws/api.dll`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "text/xml",
-      "X-EBAY-API-SITEID": siteId,
-      "X-EBAY-API-COMPATIBILITY-LEVEL": "967",
-      "X-EBAY-API-CALL-NAME": "GetUser",
-      "X-EBAY-API-IAF-TOKEN": token,
-    },
-    body: xml,
-  });
-
-  const text = await res.text();
-  const match = text.match(/<UserID>([^<]+)<\/UserID>/);
-  if (!match) {
-    // Check for auth errors in the response
-    const errMatch = text.match(/<LongMessage>([^<]+)<\/LongMessage>/);
-    throw new Error(
-      `eBay GetUser failed: ${errMatch?.[1] ?? "could not parse UserID from response"}`
-    );
-  }
-  return match[1] ?? "unknown";
-}
 
 export default router;

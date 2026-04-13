@@ -69,6 +69,8 @@ EBAY_REDIRECT_URI=Your_RuName_String
 # eBay environment config
 EBAY_ENVIRONMENT=sandbox        # "sandbox" or "production"
 EBAY_SITE_ID=2                  # 2 = Canada (eBay.ca)
+EBAY_LOCATION=Vancouver, BC     # Seller city/province
+EBAY_POSTAL_CODE=V5V1A1         # Seller postal code
 EBAY_MOCK_MODE=false            # Set to "true" to skip real eBay API calls
 ```
 
@@ -148,6 +150,8 @@ If eBay flags your app for review or you want to use restricted APIs:
 | `EBAY_REDIRECT_URI` | Yes | — | OAuth RuName string |
 | `EBAY_ENVIRONMENT` | Yes | `sandbox` | `sandbox` or `production` |
 | `EBAY_SITE_ID` | No | `2` | eBay site (2 = Canada) |
+| `EBAY_LOCATION` | Conditionally | — | Seller city/state or city/province for Trading API listings |
+| `EBAY_POSTAL_CODE` | Conditionally | — | Seller postal/ZIP code for Trading API listings |
 | `EBAY_MOCK_MODE` | No | `false` | Skip real API calls when `true` |
 | `EBAY_LOCATION` | Yes* | — | Item location string (e.g. `Vancouver, BC`)
 | `EBAY_POSTAL_CODE` | Yes* | — | Item postal code (e.g. `V6B1A1`)
@@ -172,6 +176,7 @@ If eBay flags your app for review or you want to use restricted APIs:
 ### OAuth works but publish fails
 - Check the listing has all required fields: title, price, condition, at least one photo
 - Verify `EBAY_SITE_ID` matches the eBay marketplace you want to list on
+- Set at least one seller location field: `EBAY_LOCATION` or `EBAY_POSTAL_CODE`
 - Check the backend logs for the specific eBay error code and message
 
 ### "No eBay account linked" error
