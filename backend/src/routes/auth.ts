@@ -212,8 +212,16 @@ router.post("/auth/ebay-callback", requireAuth, async (req, res) => {
     token_type?: string;
   };
 
-  // Get eBay user ID via Trading API GetUser call
-  const ebayUserId = await fetchEbayUserId(tokenData.access_token);
+  // Get eBay user ID via Trading API GetUser call (using OAuth header)
+  let ebayUserId: string;
+  try {
+    ebayUserId = await fetchEbayUserId(tokenData.access_token);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    console.error("eBay GetUser validation failed:", msg);
+    res.status(400).json({ error: `eBay account validation failed: ${msg}`, code: "EBAY_AUTH_ERROR" });
+    return;
+  }
 
   // Compute token expiry time
   const tokenExpiresAt = new Date(Date.now() + tokenData.expires_in * 1000).toISOString();
@@ -222,7 +230,7 @@ router.post("/auth/ebay-callback", requireAuth, async (req, res) => {
   const upsertData: Record<string, unknown> = {
     user_id: authReq.userId,
     ebay_token: tokenData.access_token,
-    ebay_user_id: ebayUserId ?? "unknown",
+    ebay_user_id: ebayUserId,
     site_id: Number(process.env.EBAY_SITE_ID ?? 2),
     refreshed_at: new Date().toISOString(),
   };
@@ -250,35 +258,36 @@ router.post("/auth/ebay-callback", requireAuth, async (req, res) => {
 
 // ── Helper: fetch eBay user ID ─────────────────────────
 
-async function fetchEbayUserId(token: string): Promise<string | null> {
+async function fetchEbayUserId(token: string): Promise<string> {
   const siteId = process.env.EBAY_SITE_ID ?? "2";
   const { apiBase } = getEbayUrls();
 
   const xml = `<?xml version="1.0" encoding="utf-8"?>
 <GetUserRequest xmlns="urn:ebay:apis:eBLBaseComponents">
-  <RequesterCredentials>
-    <eBayAuthToken>${token}</eBayAuthToken>
-  </RequesterCredentials>
 </GetUserRequest>`;
 
-  try {
-    const res = await fetch(`${apiBase}/ws/api.dll`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "text/xml",
-        "X-EBAY-API-SITEID": siteId,
-        "X-EBAY-API-COMPATIBILITY-LEVEL": "967",
-        "X-EBAY-API-CALL-NAME": "GetUser",
-      },
-      body: xml,
-    });
+  const res = await fetch(`${apiBase}/ws/api.dll`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "text/xml",
+      "X-EBAY-API-SITEID": siteId,
+      "X-EBAY-API-COMPATIBILITY-LEVEL": "967",
+      "X-EBAY-API-CALL-NAME": "GetUser",
+      "X-EBAY-API-IAF-TOKEN": token,
+    },
+    body: xml,
+  });
 
-    const text = await res.text();
-    const match = text.match(/<UserID>([^<]+)<\/UserID>/);
-    return match?.[1] ?? null;
-  } catch {
-    return null;
+  const text = await res.text();
+  const match = text.match(/<UserID>([^<]+)<\/UserID>/);
+  if (!match) {
+    // Check for auth errors in the response
+    const errMatch = text.match(/<LongMessage>([^<]+)<\/LongMessage>/);
+    throw new Error(
+      `eBay GetUser failed: ${errMatch?.[1] ?? "could not parse UserID from response"}`
+    );
   }
+  return match[1] ?? "unknown";
 }
 
 export default router;
