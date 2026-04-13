@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { apiFetch } from "@/lib/api";
 import { AlertTriangle, CheckCircle2, Loader2, RefreshCw } from "lucide-react";
-import type { EbayPublishSettingsResponse } from "../../../shared/types";
+import type { EbayPublishSettingsResponse, EbayMarketplace } from "../../../shared/types";
+import { EBAY_MARKETPLACE_CONFIG } from "../../../shared/types";
 
 interface EbayPublishSetupCardProps {
   title?: string;
@@ -31,6 +32,7 @@ export function EbayPublishSetupCard({
   onStateChange,
 }: EbayPublishSetupCardProps) {
   const queryClient = useQueryClient();
+  const [selectedMarketplace, setSelectedMarketplace] = useState<EbayMarketplace>("EBAY_CA");
   const [form, setForm] = useState<SellerSettingsForm>({
     location: "",
     postal_code: "",
@@ -42,9 +44,9 @@ export function EbayPublishSetupCard({
   const [saving, setSaving] = useState(false);
 
   const settingsQuery = useQuery({
-    queryKey: ["ebay-publish-settings"],
+    queryKey: ["ebay-publish-settings", selectedMarketplace],
     queryFn: () =>
-      apiFetch<EbayPublishSettingsResponse>("/account/ebay-publish-settings"),
+      apiFetch<EbayPublishSettingsResponse>(`/account/ebay-publish-settings?marketplace_id=${selectedMarketplace}`),
   });
 
   useEffect(() => {
@@ -89,6 +91,7 @@ export function EbayPublishSetupCard({
           fulfillment_policy_id: form.fulfillment_policy_id || null,
           payment_policy_id: form.payment_policy_id || null,
           return_policy_id: form.return_policy_id || null,
+          marketplace_id: selectedMarketplace,
         }),
       });
 
@@ -150,6 +153,7 @@ export function EbayPublishSetupCard({
   }
 
   const settings = settingsQuery.data;
+  const currentConfig = EBAY_MARKETPLACE_CONFIG[selectedMarketplace];
 
   return (
     <Card>
@@ -191,6 +195,25 @@ export function EbayPublishSetupCard({
             {saveError}
           </div>
         )}
+
+        <div className="space-y-2">
+          <Label htmlFor="ebay-marketplace">Marketplace</Label>
+          <select
+            id="ebay-marketplace"
+            className={SELECT_CLASS_NAME}
+            value={selectedMarketplace}
+            onChange={(event) => setSelectedMarketplace(event.target.value as EbayMarketplace)}
+          >
+            {Object.entries(EBAY_MARKETPLACE_CONFIG).map(([id, config]) => (
+              <option key={id} value={id}>
+                {config.label} ({config.currency})
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-muted-foreground">
+            Seller policies and currency are per-marketplace. Currently showing {currentConfig.label} ({currentConfig.currency}).
+          </p>
+        </div>
 
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">

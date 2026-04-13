@@ -22,7 +22,8 @@ import {
   Lock,
   Search,
 } from "lucide-react";
-import type { PokemonTcgCardDetail } from "../../../shared/types";
+import type { PokemonTcgCardDetail, EbayMarketplace } from "../../../shared/types";
+import { EBAY_MARKETPLACE_CONFIG } from "../../../shared/types";
 import type { UsageInfo } from "../../../shared/types";
 
 type Step = "photos" | "search" | "identify" | "details" | "pricing" | "preview";
@@ -93,6 +94,7 @@ export default function CreateListing() {
     "auction"
   );
   const [price, setPrice] = useState("");
+  const [marketplace, setMarketplace] = useState<EbayMarketplace>("EBAY_CA");
 
   const currentStepIndex = STEPS.findIndex((s) => s.key === step);
 
@@ -269,6 +271,8 @@ export default function CreateListing() {
           identified_by: identifiedBy,
           listing_type: listingType,
           price_cad: price ? parseFloat(price) : undefined,
+          marketplace_id: marketplace,
+          currency_code: EBAY_MARKETPLACE_CONFIG[marketplace].currency,
         }),
       });
 
@@ -717,6 +721,24 @@ export default function CreateListing() {
               </div>
             </div>
 
+            <div className="space-y-2">
+              <Label>Marketplace</Label>
+              <select
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                value={marketplace}
+                onChange={(e) => setMarketplace(e.target.value as EbayMarketplace)}
+              >
+                {Object.entries(EBAY_MARKETPLACE_CONFIG).map(([id, config]) => (
+                  <option key={id} value={id}>
+                    {config.label} ({config.currency})
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Currency: {EBAY_MARKETPLACE_CONFIG[marketplace].currency}
+              </p>
+            </div>
+
             <div className="flex justify-between pt-2">
               <Button variant="outline" onClick={() => setStep("details")}>
                 <ArrowLeft className="mr-1.5 size-4" />
@@ -786,7 +808,7 @@ export default function CreateListing() {
                   </p>
                 </div>
                 <div className="rounded-md bg-muted p-2.5">
-                  <p className="text-xs text-muted-foreground">Price (CAD)</p>
+                  <p className="text-xs text-muted-foreground">Price ({EBAY_MARKETPLACE_CONFIG[marketplace].currency})</p>
                   <p className="text-sm font-medium">
                     {price ? `$${price}` : "Not set"}
                   </p>

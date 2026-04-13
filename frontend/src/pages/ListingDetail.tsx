@@ -39,6 +39,8 @@ interface Listing {
   title: string | null;
   description: string | null;
   price_cad: number | null;
+  marketplace_id: string;
+  currency_code: string;
   listing_type: string;
   duration: number;
   ebay_item_id: number | null;
@@ -839,7 +841,7 @@ export default function ListingDetail() {
                 </p>
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">Price (CAD)</Label>
+                <Label className="text-xs">Price ({listing.currency_code || "CAD"})</Label>
                 <Input
                   type="number"
                   step="0.01"
@@ -865,7 +867,7 @@ export default function ListingDetail() {
                 <div>
                   <p className="text-muted-foreground">Price</p>
                   <p className="font-heading text-xl font-bold">
-                    {listing.price_cad ? `$${listing.price_cad} CAD` : "Not set"}
+                    {listing.price_cad ? `$${listing.price_cad} ${listing.currency_code || "CAD"}` : "Not set"}
                   </p>
                 </div>
                 <div>
