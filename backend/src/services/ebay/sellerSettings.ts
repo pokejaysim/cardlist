@@ -1,8 +1,13 @@
 import { supabase } from "../../lib/supabase.js";
-import { getEbayMarketplaceId, getEbayMarketplaceConfig, getEbayUrls, SUPPORTED_MARKETPLACES, type EbayMarketplaceConfig } from "./config.js";
+import {
+  getEbayMarketplaceConfig,
+  getEbayMarketplaceId,
+  getEbayUrls,
+} from "./config.js";
 import { getValidEbayToken } from "./tokenManager.js";
 
 type PolicyType = "fulfillment" | "payment" | "return";
+type ReturnShippingCostPayer = "Buyer" | "Seller";
 
 interface PolicyResponse {
   marketplaceId?: string;
@@ -23,6 +28,12 @@ interface SellerSettingsRow {
   payment_policy_name: string | null;
   return_policy_id: string | null;
   return_policy_name: string | null;
+  shipping_service: string | null;
+  shipping_cost: number | null;
+  handling_time_days: number | null;
+  returns_accepted: boolean | null;
+  return_period_days: number | null;
+  return_shipping_cost_payer: ReturnShippingCostPayer | null;
   last_synced_at: string | null;
   created_at: string;
   updated_at: string;
@@ -40,6 +51,16 @@ export interface EbayBusinessPolicyBundle {
   return: EbayBusinessPolicy[];
 }
 
+export interface EbayPolicySupport {
+  available: boolean;
+  message: string | null;
+}
+
+export type EbayPublishStrategy =
+  | "business_policies"
+  | "snapcard_defaults"
+  | "incomplete";
+
 export interface EbaySellerSettings {
   user_id: string;
   marketplace_id: string;
@@ -51,6 +72,12 @@ export interface EbaySellerSettings {
   payment_policy_name: string | null;
   return_policy_id: string | null;
   return_policy_name: string | null;
+  shipping_service: string | null;
+  shipping_cost: number | null;
+  handling_time_days: number | null;
+  returns_accepted: boolean | null;
+  return_period_days: number | null;
+  return_shipping_cost_payer: ReturnShippingCostPayer | null;
   last_synced_at: string | null;
   created_at: string;
   updated_at: string;
@@ -61,6 +88,8 @@ export interface EbayPublishSettingsState {
   marketplace_id: string;
   settings: EbaySellerSettings | null;
   available_policies: EbayBusinessPolicyBundle;
+  policy_support: EbayPolicySupport;
+  publish_strategy: EbayPublishStrategy;
   readiness: {
     ready: boolean;
     missing: string[];
@@ -73,12 +102,69 @@ export interface SaveSellerSettingsInput {
   fulfillment_policy_id?: string | null;
   payment_policy_id?: string | null;
   return_policy_id?: string | null;
+  shipping_service?: string | null;
+  shipping_cost?: number | null;
+  handling_time_days?: number | null;
+  returns_accepted?: boolean | null;
+  return_period_days?: number | null;
+  return_shipping_cost_payer?: ReturnShippingCostPayer | null;
   marketplace_id?: string | null;
 }
 
-function normalizePolicyId(policyId: string | number | null | undefined): string | null {
+const EMPTY_POLICIES: EbayBusinessPolicyBundle = {
+  fulfillment: [],
+  payment: [],
+  return: [],
+};
+
+const BUSINESS_POLICY_UNAVAILABLE_MESSAGES = [
+  "not opted into business policies",
+  "not eligible for business policy",
+  "\"errorid\":20403",
+  "\"errorid\": 20403",
+];
+
+function normalizePolicyId(
+  policyId: string | number | null | undefined,
+): string | null {
   if (policyId == null) return null;
   return String(policyId);
+}
+
+function normalizeMarketplaceId(marketplaceId?: string | null): string {
+  return marketplaceId ?? getEbayMarketplaceId();
+}
+
+function normalizeOptionalString(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
+
+function normalizeOptionalNumber(
+  value: number | string | null | undefined,
+): number | null {
+  if (value == null || value === "") {
+    return null;
+  }
+
+  const numeric = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(numeric)) {
+    return null;
+  }
+
+  return numeric;
+}
+
+function normalizeOptionalPositiveInteger(
+  value: number | string | null | undefined,
+): number | null {
+  const numeric = normalizeOptionalNumber(value);
+  if (numeric == null) {
+    return null;
+  }
+
+  const rounded = Math.round(numeric);
+  return rounded > 0 ? rounded : null;
 }
 
 function mapPolicies(
@@ -123,27 +209,35 @@ async function fetchUserJson<T>(userId: string, path: string): Promise<T> {
   if (!response.ok) {
     const errorText = await response.text();
 
-    // Check for Business Policy opt-in error (error 20403)
     try {
       const errorJson = JSON.parse(errorText);
       const errorCode = errorJson?.errors?.[0]?.errorId ?? errorJson?.errorId;
-      if (errorCode === 20403 || errorText.includes("20403") || errorText.includes("not eligible for Business Policy")) {
+      if (errorCode === 20403) {
         throw new Error(
-          "Your eBay account is not opted into Business Policies yet. Enable Business Policies in your eBay sandbox account and create shipping, payment, and return policies."
+          "Your eBay account is not opted into Business Policies yet. SnapCard can still publish by using its own saved shipping and return defaults.",
         );
       }
-    } catch (e) {
-      // Re-throw our friendly error
-      if (e instanceof Error && e.message.includes("not opted into Business Policies")) {
-        throw e;
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message.includes("not opted into Business Policies")
+      ) {
+        throw error;
       }
-      // Not JSON or a different parse error — fall through to generic message
     }
 
     throw new Error(`eBay seller settings request failed: ${errorText}`);
   }
 
   return (await response.json()) as T;
+}
+
+function isBusinessPolicyUnavailableError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  const normalized = message.toLowerCase();
+  return BUSINESS_POLICY_UNAVAILABLE_MESSAGES.some((entry) =>
+    normalized.includes(entry),
+  );
 }
 
 async function getLinkedAccount(userId: string): Promise<boolean> {
@@ -164,7 +258,7 @@ export async function getStoredSellerSettings(
   userId: string,
   marketplaceId?: string,
 ): Promise<EbaySellerSettings | null> {
-  const mid = marketplaceId ?? getEbayMarketplaceId();
+  const mid = normalizeMarketplaceId(marketplaceId);
   const { data, error } = await supabase
     .from("ebay_seller_settings")
     .select("*")
@@ -215,6 +309,39 @@ export async function fetchSellerBusinessPolicies(
   };
 }
 
+async function loadBusinessPolicyAccess(
+  userId: string,
+  marketplaceId: string,
+): Promise<{
+  policies: EbayBusinessPolicyBundle;
+  policySupport: EbayPolicySupport;
+}> {
+  try {
+    return {
+      policies: await fetchSellerBusinessPolicies(userId, marketplaceId),
+      policySupport: {
+        available: true,
+        message: null,
+      },
+    };
+  } catch (error) {
+    if (!isBusinessPolicyUnavailableError(error)) {
+      throw error;
+    }
+
+    return {
+      policies: EMPTY_POLICIES,
+      policySupport: {
+        available: false,
+        message:
+          error instanceof Error
+            ? error.message
+            : "eBay Business Policies are unavailable for this account.",
+      },
+    };
+  }
+}
+
 function findPolicyName(
   policies: EbayBusinessPolicy[],
   policyId: string | null | undefined,
@@ -223,38 +350,113 @@ function findPolicyName(
   return policies.find((policy) => policy.id === policyId)?.name ?? null;
 }
 
+function isPolicySelectionValid(
+  settings: EbaySellerSettings | null,
+  policies: EbayBusinessPolicyBundle,
+): boolean {
+  return Boolean(
+    settings?.fulfillment_policy_id &&
+      findPolicyName(policies.fulfillment, settings.fulfillment_policy_id) &&
+      settings.payment_policy_id &&
+      findPolicyName(policies.payment, settings.payment_policy_id) &&
+      settings.return_policy_id &&
+      findPolicyName(policies.return, settings.return_policy_id),
+  );
+}
+
+function hasManualShippingDefaults(
+  settings: EbaySellerSettings | null,
+): boolean {
+  return Boolean(
+    settings?.shipping_service &&
+      settings.shipping_cost != null &&
+      settings.shipping_cost >= 0 &&
+      settings.handling_time_days != null &&
+      settings.handling_time_days > 0,
+  );
+}
+
+function hasManualReturnDefaults(settings: EbaySellerSettings | null): boolean {
+  if (settings?.returns_accepted == null) {
+    return false;
+  }
+
+  if (!settings.returns_accepted) {
+    return true;
+  }
+
+  return Boolean(
+    settings.return_period_days != null &&
+      settings.return_period_days > 0 &&
+      settings.return_shipping_cost_payer,
+  );
+}
+
+export function getSellerPublishStrategy(
+  settings: EbaySellerSettings | null,
+  policies: EbayBusinessPolicyBundle,
+): EbayPublishStrategy {
+  if (isPolicySelectionValid(settings, policies)) {
+    return "business_policies";
+  }
+
+  if (hasManualShippingDefaults(settings) && hasManualReturnDefaults(settings)) {
+    return "snapcard_defaults";
+  }
+
+  return "incomplete";
+}
+
 function buildMissingMessages(
   settings: EbaySellerSettings | null,
   policies: EbayBusinessPolicyBundle,
+  policySupport: EbayPolicySupport,
 ): string[] {
   const missing: string[] = [];
+  const strategy = getSellerPublishStrategy(settings, policies);
 
   if (!settings?.location && !settings?.postal_code) {
     missing.push("Add a seller location or postal code.");
   }
 
-  if (policies.fulfillment.length === 0) {
-    missing.push("Create at least one eBay fulfillment policy.");
-  } else if (!settings?.fulfillment_policy_id) {
-    missing.push("Select a default fulfillment policy.");
-  } else if (!findPolicyName(policies.fulfillment, settings.fulfillment_policy_id)) {
-    missing.push("Re-select your fulfillment policy.");
+  if (strategy !== "incomplete") {
+    return missing;
   }
 
-  if (policies.payment.length === 0) {
-    missing.push("Create at least one eBay payment policy.");
-  } else if (!settings?.payment_policy_id) {
-    missing.push("Select a default payment policy.");
-  } else if (!findPolicyName(policies.payment, settings.payment_policy_id)) {
-    missing.push("Re-select your payment policy.");
+  if (policySupport.available) {
+    missing.push(
+      "Select all three eBay business policies, or save SnapCard shipping and return defaults below.",
+    );
   }
 
-  if (policies.return.length === 0) {
-    missing.push("Create at least one eBay return policy.");
-  } else if (!settings?.return_policy_id) {
-    missing.push("Select a default return policy.");
-  } else if (!findPolicyName(policies.return, settings.return_policy_id)) {
-    missing.push("Re-select your return policy.");
+  if (!settings?.shipping_service) {
+    missing.push("Choose a default shipping service for SnapCard fallback.");
+  }
+
+  if (settings?.shipping_cost == null || settings.shipping_cost < 0) {
+    missing.push("Set a default shipping cost for SnapCard fallback.");
+  }
+
+  if (
+    settings?.handling_time_days == null ||
+    settings.handling_time_days <= 0
+  ) {
+    missing.push("Set a handling time for SnapCard fallback.");
+  }
+
+  if (settings?.returns_accepted == null) {
+    missing.push("Choose whether you accept returns in SnapCard fallback.");
+  } else if (settings.returns_accepted) {
+    if (
+      settings.return_period_days == null ||
+      settings.return_period_days <= 0
+    ) {
+      missing.push("Choose a return window for SnapCard fallback.");
+    }
+
+    if (!settings.return_shipping_cost_payer) {
+      missing.push("Choose who pays return shipping in SnapCard fallback.");
+    }
   }
 
   return missing;
@@ -262,8 +464,36 @@ function buildMissingMessages(
 
 function getEnvSellerLocationDefaults() {
   return {
-    location: process.env.EBAY_LOCATION?.trim() || null,
-    postal_code: process.env.EBAY_POSTAL_CODE?.trim() || null,
+    location: normalizeOptionalString(process.env.EBAY_LOCATION),
+    postal_code: normalizeOptionalString(process.env.EBAY_POSTAL_CODE),
+  };
+}
+
+function buildEmptySettings(
+  marketplaceId: string,
+  locationDefaults?: { location: string | null; postal_code: string | null },
+): EbaySellerSettings {
+  const timestamp = new Date(0).toISOString();
+  return {
+    user_id: "",
+    marketplace_id: marketplaceId,
+    location: locationDefaults?.location ?? null,
+    postal_code: locationDefaults?.postal_code ?? null,
+    fulfillment_policy_id: null,
+    fulfillment_policy_name: null,
+    payment_policy_id: null,
+    payment_policy_name: null,
+    return_policy_id: null,
+    return_policy_name: null,
+    shipping_service: null,
+    shipping_cost: null,
+    handling_time_days: null,
+    returns_accepted: null,
+    return_period_days: null,
+    return_shipping_cost_payer: null,
+    last_synced_at: null,
+    created_at: timestamp,
+    updated_at: timestamp,
   };
 }
 
@@ -278,22 +508,7 @@ function applyLocationFallback(
       return null;
     }
 
-    const timestamp = new Date(0).toISOString();
-    return {
-      user_id: "",
-      marketplace_id: marketplaceId,
-      location: envDefaults.location,
-      postal_code: envDefaults.postal_code,
-      fulfillment_policy_id: null,
-      fulfillment_policy_name: null,
-      payment_policy_id: null,
-      payment_policy_name: null,
-      return_policy_id: null,
-      return_policy_name: null,
-      last_synced_at: null,
-      created_at: timestamp,
-      updated_at: timestamp,
-    };
+    return buildEmptySettings(marketplaceId, envDefaults);
   }
 
   if (settings.location || settings.postal_code) {
@@ -316,7 +531,7 @@ async function upsertSellerSettings(
     .upsert(
       {
         user_id: userId,
-        marketplace_id: payload.marketplace_id ?? getEbayMarketplaceId(),
+        marketplace_id: normalizeMarketplaceId(payload.marketplace_id),
         ...payload,
         updated_at: new Date().toISOString(),
       },
@@ -326,7 +541,9 @@ async function upsertSellerSettings(
     .single();
 
   if (error || !data) {
-    throw new Error(`Failed to save eBay publish settings: ${error?.message ?? "unknown error"}`);
+    throw new Error(
+      `Failed to save eBay publish settings: ${error?.message ?? "unknown error"}`,
+    );
   }
 
   return data as EbaySellerSettings;
@@ -337,22 +554,7 @@ function buildAutoSelectionPayload(
   policies: EbayBusinessPolicyBundle,
   marketplaceId: string,
 ): Partial<SellerSettingsRow> | null {
-  const current = settings ?? {
-    user_id: "",
-    marketplace_id: marketplaceId,
-    location: null,
-    postal_code: null,
-    fulfillment_policy_id: null,
-    fulfillment_policy_name: null,
-    payment_policy_id: null,
-    payment_policy_name: null,
-    return_policy_id: null,
-    return_policy_name: null,
-    last_synced_at: null,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  };
-
+  const current = settings ?? buildEmptySettings(marketplaceId);
   const payload: Partial<SellerSettingsRow> = {
     marketplace_id: marketplaceId,
     last_synced_at: new Date().toISOString(),
@@ -385,18 +587,19 @@ export async function getEbayPublishSettingsState(
   marketplaceId?: string,
 ): Promise<EbayPublishSettingsState> {
   const linked = await getLinkedAccount(userId);
-  const mid = marketplaceId ?? getEbayMarketplaceId();
+  const mid = normalizeMarketplaceId(marketplaceId);
 
   if (!linked) {
     return {
       linked: false,
       marketplace_id: mid,
       settings: null,
-      available_policies: {
-        fulfillment: [],
-        payment: [],
-        return: [],
+      available_policies: EMPTY_POLICIES,
+      policy_support: {
+        available: false,
+        message: null,
       },
+      publish_strategy: "incomplete",
       readiness: {
         ready: false,
         missing: ["Connect your eBay account."],
@@ -404,54 +607,34 @@ export async function getEbayPublishSettingsState(
     };
   }
 
-  let settings = applyLocationFallback(
-    await getStoredSellerSettings(userId, mid),
-    mid,
-  );
-
-  let policies: EbayBusinessPolicyBundle;
-  try {
-    policies = await fetchSellerBusinessPolicies(
-      userId,
-      settings?.marketplace_id ?? mid,
-    );
-  } catch (err) {
-    // If Business Policies API fails (e.g. not opted in), return empty policies
-    // with a helpful error message
-    const errMsg = err instanceof Error ? err.message : String(err);
-    return {
-      linked: true,
-      marketplace_id: settings?.marketplace_id ?? mid,
-      settings,
-      available_policies: {
-        fulfillment: [],
-        payment: [],
-        return: [],
-      },
-      readiness: {
-        ready: false,
-        missing: [errMsg],
-      },
-    };
-  }
-
-  const autoSelection = buildAutoSelectionPayload(
-    settings,
-    policies,
+  let settings = applyLocationFallback(await getStoredSellerSettings(userId, mid), mid);
+  const { policies, policySupport } = await loadBusinessPolicyAccess(
+    userId,
     settings?.marketplace_id ?? mid,
   );
 
-  if (autoSelection) {
-    settings = await upsertSellerSettings(userId, autoSelection);
+  if (policySupport.available) {
+    const autoSelection = buildAutoSelectionPayload(
+      settings,
+      policies,
+      settings?.marketplace_id ?? mid,
+    );
+
+    if (autoSelection) {
+      settings = await upsertSellerSettings(userId, autoSelection);
+    }
   }
 
-  const missing = buildMissingMessages(settings, policies);
+  const publishStrategy = getSellerPublishStrategy(settings, policies);
+  const missing = buildMissingMessages(settings, policies, policySupport);
 
   return {
     linked: true,
     marketplace_id: settings?.marketplace_id ?? mid,
     settings,
     available_policies: policies,
+    policy_support: policySupport,
+    publish_strategy: publishStrategy,
     readiness: {
       ready: missing.length === 0,
       missing,
@@ -463,44 +646,77 @@ export async function saveEbayPublishSettings(
   userId: string,
   input: SaveSellerSettingsInput,
 ): Promise<EbayPublishSettingsState> {
-  const marketplaceId = input.marketplace_id ?? getEbayMarketplaceId();
-  const policies = await fetchSellerBusinessPolicies(userId, marketplaceId);
+  const marketplaceId = normalizeMarketplaceId(input.marketplace_id);
+  const { policies, policySupport } = await loadBusinessPolicyAccess(
+    userId,
+    marketplaceId,
+  );
+  const marketplaceConfig = getEbayMarketplaceConfig(marketplaceId);
 
   const fulfillmentPolicyId = normalizePolicyId(input.fulfillment_policy_id);
   const paymentPolicyId = normalizePolicyId(input.payment_policy_id);
   const returnPolicyId = normalizePolicyId(input.return_policy_id);
 
-  if (
-    fulfillmentPolicyId &&
-    !policies.fulfillment.some((policy) => policy.id === fulfillmentPolicyId)
-  ) {
-    throw new Error("The selected fulfillment policy is no longer available on eBay.");
+  if (!policySupport.available) {
+    if (fulfillmentPolicyId || paymentPolicyId || returnPolicyId) {
+      throw new Error(
+        `eBay Business Policies are unavailable for ${marketplaceConfig.label}. Clear the policy fields and save SnapCard fallback defaults instead.`,
+      );
+    }
+  } else {
+    if (
+      fulfillmentPolicyId &&
+      !policies.fulfillment.some((policy) => policy.id === fulfillmentPolicyId)
+    ) {
+      throw new Error(
+        "The selected fulfillment policy is no longer available on eBay.",
+      );
+    }
+
+    if (
+      paymentPolicyId &&
+      !policies.payment.some((policy) => policy.id === paymentPolicyId)
+    ) {
+      throw new Error(
+        "The selected payment policy is no longer available on eBay.",
+      );
+    }
+
+    if (
+      returnPolicyId &&
+      !policies.return.some((policy) => policy.id === returnPolicyId)
+    ) {
+      throw new Error(
+        "The selected return policy is no longer available on eBay.",
+      );
+    }
   }
 
-  if (
-    paymentPolicyId &&
-    !policies.payment.some((policy) => policy.id === paymentPolicyId)
-  ) {
-    throw new Error("The selected payment policy is no longer available on eBay.");
-  }
-
-  if (
-    returnPolicyId &&
-    !policies.return.some((policy) => policy.id === returnPolicyId)
-  ) {
-    throw new Error("The selected return policy is no longer available on eBay.");
-  }
+  const returnsAccepted =
+    input.returns_accepted === null || input.returns_accepted === undefined
+      ? null
+      : Boolean(input.returns_accepted);
 
   const payload: Partial<SellerSettingsRow> = {
     marketplace_id: marketplaceId,
-    location: input.location?.trim() || null,
-    postal_code: input.postal_code?.trim() || null,
+    location: normalizeOptionalString(input.location),
+    postal_code: normalizeOptionalString(input.postal_code),
     fulfillment_policy_id: fulfillmentPolicyId,
     fulfillment_policy_name: findPolicyName(policies.fulfillment, fulfillmentPolicyId),
     payment_policy_id: paymentPolicyId,
     payment_policy_name: findPolicyName(policies.payment, paymentPolicyId),
     return_policy_id: returnPolicyId,
     return_policy_name: findPolicyName(policies.return, returnPolicyId),
+    shipping_service: normalizeOptionalString(input.shipping_service),
+    shipping_cost: normalizeOptionalNumber(input.shipping_cost),
+    handling_time_days: normalizeOptionalPositiveInteger(input.handling_time_days),
+    returns_accepted: returnsAccepted,
+    return_period_days: returnsAccepted
+      ? normalizeOptionalPositiveInteger(input.return_period_days)
+      : null,
+    return_shipping_cost_payer: returnsAccepted
+      ? input.return_shipping_cost_payer ?? null
+      : null,
     last_synced_at: new Date().toISOString(),
   };
 

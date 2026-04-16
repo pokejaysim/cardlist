@@ -23,6 +23,16 @@ export interface ListingData {
     SellerReturnProfile: { ReturnProfileID: string };
     SellerPaymentProfile: { PaymentProfileID: string };
   };
+  manual_shipping?: {
+    shipping_service: string;
+    shipping_cost: number;
+    handling_time_days: number;
+  };
+  manual_return_policy?: {
+    returns_accepted: boolean;
+    return_period_days?: number;
+    return_shipping_cost_payer?: "Buyer" | "Seller";
+  };
   location?: string;
   postal_code?: string;
   condition_descriptors?: Array<{
@@ -193,6 +203,10 @@ function buildItemPayload(listing: ListingData, marketplaceId?: string): Record<
   }
 
   const mc = getEbayMarketplaceConfig(marketplaceId);
+  const dispatchTimeMax =
+    listing.manual_shipping?.handling_time_days != null
+      ? listing.manual_shipping.handling_time_days
+      : 3;
 
   return {
     Item: {
@@ -232,9 +246,40 @@ function buildItemPayload(listing: ListingData, marketplaceId?: string): Record<
         ? {
             SellerProfiles: listing.seller_profiles,
           }
+        : listing.manual_shipping
+          ? {
+              ShippingDetails: {
+                ShippingType: "Flat",
+                ShippingServiceOptions: {
+                  ShippingServicePriority: 1,
+                  ShippingService: listing.manual_shipping.shipping_service,
+                  ShippingServiceCost: listing.manual_shipping.shipping_cost,
+                  ...(listing.manual_shipping.shipping_cost === 0
+                    ? { FreeShipping: true }
+                    : {}),
+                },
+              },
+            }
+          : {}),
+      ...(listing.manual_return_policy
+        ? {
+            ReturnPolicy: listing.manual_return_policy.returns_accepted
+              ? {
+                  ReturnsAcceptedOption: "ReturnsAccepted",
+                  ReturnsWithinOption: `Days_${String(
+                    listing.manual_return_policy.return_period_days ?? 30,
+                  )}`,
+                  ShippingCostPaidByOption:
+                    listing.manual_return_policy.return_shipping_cost_payer ??
+                    "Buyer",
+                }
+              : {
+                  ReturnsAcceptedOption: "ReturnsNotAccepted",
+                },
+          }
         : {}),
       Site: mc.country === "CA" ? "Canada" : "US",
-      DispatchTimeMax: 3,
+      DispatchTimeMax: dispatchTimeMax,
     },
   };
 }

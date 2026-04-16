@@ -255,6 +255,12 @@ export const DEV_EBAY_PUBLISH_SETTINGS: EbayPublishSettingsResponse = {
     payment_policy_name: "Managed Payments",
     return_policy_id: "",
     return_policy_name: null,
+    shipping_service: "CA_PostExpeditedParcel",
+    shipping_cost: 2.5,
+    handling_time_days: 2,
+    returns_accepted: true,
+    return_period_days: 30,
+    return_shipping_cost_payer: "Buyer",
     last_synced_at: new Date().toISOString(),
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -270,8 +276,13 @@ export const DEV_EBAY_PUBLISH_SETTINGS: EbayPublishSettingsResponse = {
       { id: "returns-30", name: "30 day returns", marketplace_id: "EBAY_CA" },
     ],
   },
+  policy_support: {
+    available: true,
+    message: null,
+  },
+  publish_strategy: "snapcard_defaults",
   readiness: {
-    ready: false,
-    missing: ["Select a default return policy."],
+    ready: true,
+    missing: [],
   },
 };

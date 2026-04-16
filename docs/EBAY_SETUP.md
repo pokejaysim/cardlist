@@ -11,6 +11,11 @@ SnapCard uses the eBay Trading API to publish Pokemon card listings on your beha
 - **You (developer)** — register for API credentials and configure SnapCard
 - **Your users (card sellers)** — connect their eBay seller account via a one-click OAuth flow
 
+SnapCard supports two publish modes:
+
+- **eBay Business Policies** — preferred when the seller already has fulfillment, payment, and return policies on the chosen marketplace
+- **SnapCard fallback defaults** — beta fallback that stores shipping and return defaults inside SnapCard and sends them inline to the Trading API when business policies are unavailable
+
 ---
 
 ## Step 1: Register as an eBay Developer
@@ -178,6 +183,17 @@ If eBay flags your app for review or you want to use restricted APIs:
 - Verify `EBAY_SITE_ID` matches the eBay marketplace you want to list on
 - Set at least one seller location field: `EBAY_LOCATION` or `EBAY_POSTAL_CODE`
 - Check the backend logs for the specific eBay error code and message
+
+### Business policies are unavailable for a seller account
+- The seller can still publish by opening **SnapCard → Account → eBay Publish Setup**
+- Save the SnapCard fallback defaults:
+  - shipping service
+  - shipping cost
+  - handling time
+  - returns accepted
+  - return window
+  - who pays return shipping
+- If the seller later enables eBay Business Policies, SnapCard can switch back to the policy-based flow by selecting all three policy dropdowns
 
 ### "No eBay account linked" error
 - The user needs to complete the OAuth flow before publishing

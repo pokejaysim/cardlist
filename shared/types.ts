@@ -38,6 +38,12 @@ export interface EbaySellerSettings {
   payment_policy_name: string | null;
   return_policy_id: string | null;
   return_policy_name: string | null;
+  shipping_service: string | null;
+  shipping_cost: number | null;
+  handling_time_days: number | null;
+  returns_accepted: boolean | null;
+  return_period_days: number | null;
+  return_shipping_cost_payer: "Buyer" | "Seller" | null;
   last_synced_at: string | null;
   created_at: string;
   updated_at: string;
@@ -52,6 +58,11 @@ export interface EbayPublishSettingsResponse {
     payment: EbayBusinessPolicy[];
     return: EbayBusinessPolicy[];
   };
+  policy_support: {
+    available: boolean;
+    message: string | null;
+  };
+  publish_strategy: "business_policies" | "snapcard_defaults" | "incomplete";
   readiness: {
     ready: boolean;
     missing: string[];
@@ -99,6 +110,25 @@ export const EBAY_MARKETPLACE_CONFIG: Record<EbayMarketplace, { siteId: string; 
   EBAY_CA: { siteId: "2", country: "CA", currency: "CAD", label: "eBay Canada" },
   EBAY_US: { siteId: "0", country: "US", currency: "USD", label: "eBay US" },
 };
+
+export const SNAPCARD_FALLBACK_SHIPPING_OPTIONS: Record<
+  EbayMarketplace,
+  Array<{ value: string; label: string }>
+> = {
+  EBAY_CA: [
+    { value: "CA_PostLettermail", label: "Canada Post Lettermail" },
+    { value: "CA_PostRegularParcel", label: "Canada Post Regular Parcel" },
+    { value: "CA_PostExpeditedParcel", label: "Canada Post Expedited Parcel" },
+  ],
+  EBAY_US: [
+    { value: "USPSGround", label: "USPS Ground" },
+    { value: "USPSFirstClass", label: "USPS First Class" },
+    { value: "USPSPriority", label: "USPS Priority Mail" },
+  ],
+};
+
+export const SNAPCARD_FALLBACK_HANDLING_TIME_OPTIONS = [1, 2, 3, 5] as const;
+export const SNAPCARD_FALLBACK_RETURN_DAYS_OPTIONS = [14, 30, 60] as const;
 
 export interface Listing {
   id: string;

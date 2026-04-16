@@ -89,7 +89,11 @@ export async function schedulePublish(
       userId,
       photoUrls,
     );
-    const { warnings } = await verifyAddItem(listingData, token);
+    const { warnings } = await verifyAddItem(
+      listingData,
+      token,
+      listingData.marketplaceId,
+    );
 
     // Log warnings but don't block on them
     if (warnings.length > 0) {

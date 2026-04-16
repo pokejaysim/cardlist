@@ -11,6 +11,12 @@ CREATE TABLE IF NOT EXISTS ebay_seller_settings (
   payment_policy_name VARCHAR(255),
   return_policy_id VARCHAR(64),
   return_policy_name VARCHAR(255),
+  shipping_service VARCHAR(128),
+  shipping_cost NUMERIC(10,2),
+  handling_time_days INTEGER,
+  returns_accepted BOOLEAN,
+  return_period_days INTEGER,
+  return_shipping_cost_payer VARCHAR(16),
   last_synced_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()

@@ -187,6 +187,12 @@ router.put("/account/ebay-publish-settings", requireAuth, async (req, res) => {
     fulfillment_policy_id,
     payment_policy_id,
     return_policy_id,
+    shipping_service,
+    shipping_cost,
+    handling_time_days,
+    returns_accepted,
+    return_period_days,
+    return_shipping_cost_payer,
     marketplace_id,
   } = req.body as {
     location?: string | null;
@@ -194,6 +200,12 @@ router.put("/account/ebay-publish-settings", requireAuth, async (req, res) => {
     fulfillment_policy_id?: string | null;
     payment_policy_id?: string | null;
     return_policy_id?: string | null;
+    shipping_service?: string | null;
+    shipping_cost?: number | null;
+    handling_time_days?: number | null;
+    returns_accepted?: boolean | null;
+    return_period_days?: number | null;
+    return_shipping_cost_payer?: "Buyer" | "Seller" | null;
     marketplace_id?: string | null;
   };
 
@@ -204,6 +216,12 @@ router.put("/account/ebay-publish-settings", requireAuth, async (req, res) => {
       fulfillment_policy_id,
       payment_policy_id,
       return_policy_id,
+      shipping_service,
+      shipping_cost,
+      handling_time_days,
+      returns_accepted,
+      return_period_days,
+      return_shipping_cost_payer,
       marketplace_id,
     });
     res.json(settings);

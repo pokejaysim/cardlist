@@ -15,6 +15,7 @@ import {
 } from "./config.js";
 import {
   getEbayPublishSettingsState,
+  getSellerPublishStrategy,
   type EbaySellerSettings,
 } from "./sellerSettings.js";
 
@@ -68,10 +69,20 @@ export interface PreparedPublishData {
     Name: string;
     Value: string[];
   }>;
-  seller_profiles: {
+  seller_profiles?: {
     SellerShippingProfile: { ShippingProfileID: string };
     SellerReturnProfile: { ReturnProfileID: string };
     SellerPaymentProfile: { PaymentProfileID: string };
+  };
+  manual_shipping?: {
+    shipping_service: string;
+    shipping_cost: number;
+    handling_time_days: number;
+  };
+  manual_return_policy?: {
+    returns_accepted: boolean;
+    return_period_days?: number;
+    return_shipping_cost_payer?: "Buyer" | "Seller";
   };
   location?: string;
   postal_code?: string;
@@ -94,6 +105,7 @@ interface ListingRow {
   card_type: "raw" | "graded" | null;
   grading_company: string | null;
   grade: string | null;
+  marketplace_id: string | null;
   listing_type: "auction" | "fixed_price";
   duration: number;
   ebay_aspects: Record<string, unknown> | null;
@@ -472,6 +484,47 @@ function buildSellerProfileContainer(settings: EbaySellerSettings) {
   };
 }
 
+function buildManualShippingDefaults(settings: EbaySellerSettings) {
+  if (
+    !settings.shipping_service ||
+    settings.shipping_cost == null ||
+    settings.handling_time_days == null
+  ) {
+    return null;
+  }
+
+  return {
+    shipping_service: settings.shipping_service,
+    shipping_cost: settings.shipping_cost,
+    handling_time_days: settings.handling_time_days,
+  };
+}
+
+function buildManualReturnPolicy(settings: EbaySellerSettings) {
+  if (settings.returns_accepted == null) {
+    return null;
+  }
+
+  if (!settings.returns_accepted) {
+    return {
+      returns_accepted: false,
+    };
+  }
+
+  if (
+    settings.return_period_days == null ||
+    !settings.return_shipping_cost_payer
+  ) {
+    return null;
+  }
+
+  return {
+    returns_accepted: true,
+    return_period_days: settings.return_period_days,
+    return_shipping_cost_payer: settings.return_shipping_cost_payer,
+  };
+}
+
 async function loadListing(
   listingId: string,
   userId: string,
@@ -516,9 +569,8 @@ async function prepareListingContext(
       .map((photo) => photo.ebay_url ?? photo.file_url)
       .filter((url): url is string => Boolean(url));
 
-  const settingsState = await getEbayPublishSettingsState(userId);
-  const marketplaceId =
-    settingsState.settings?.marketplace_id ?? getEbayMarketplaceId();
+  const marketplaceId = listing.marketplace_id ?? getEbayMarketplaceId();
+  const settingsState = await getEbayPublishSettingsState(userId, marketplaceId);
   const categoryId = getTradingCardCategoryId();
 
   const [aspects, listingTypes, returnPolicy, conditionMetadata] =
@@ -650,10 +702,20 @@ export async function getPublishReadiness(
     }
   }
 
-  if (returnPolicy.required && !settingsState.settings?.return_policy_id) {
+  const sellerPublishStrategy = getSellerPublishStrategy(
+    settingsState.settings,
+    settingsState.available_policies,
+  );
+
+  if (
+    returnPolicy.required &&
+    sellerPublishStrategy === "incomplete" &&
+    settingsState.settings?.returns_accepted == null
+  ) {
     missing.push({
       code: "missing_required_return_policy",
-      message: "Select a default return policy for this category.",
+      message:
+        "Choose a return setup in eBay policies or SnapCard fallback defaults.",
       scope: "seller",
     });
   }
@@ -704,6 +766,11 @@ export async function prepareListingForPublish(
     throw new Error("eBay publish settings are missing.");
   }
 
+  const sellerPublishStrategy = getSellerPublishStrategy(
+    settings,
+    settingsState.available_policies,
+  );
+
   const storedAspects = normalizeAspectValueMap(listing.ebay_aspects);
   const derivedCandidates = buildDerivedAspectCandidates(listing);
   const resolvedItemSpecifics = Object.fromEntries(
@@ -742,7 +809,15 @@ export async function prepareListingForPublish(
       Name,
       Value,
     })),
-    seller_profiles: buildSellerProfileContainer(settings),
+    ...(sellerPublishStrategy === "business_policies"
+      ? {
+          seller_profiles: buildSellerProfileContainer(settings),
+        }
+      : {
+          manual_shipping: buildManualShippingDefaults(settings) ?? undefined,
+          manual_return_policy:
+            buildManualReturnPolicy(settings) ?? undefined,
+        }),
     location: settings.location ?? undefined,
     postal_code: settings.postal_code ?? undefined,
     condition_descriptors: conditionInputs.descriptors,

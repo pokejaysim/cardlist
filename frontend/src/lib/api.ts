@@ -122,7 +122,7 @@ function devMockResponse<T>(path: string, options?: RequestInit): T | null {
     } as unknown as T;
   }
 
-  if (path === "/account/ebay-publish-settings" && method === "GET") {
+  if (path.startsWith("/account/ebay-publish-settings") && method === "GET") {
     return DEV_EBAY_PUBLISH_SETTINGS as unknown as T;
   }
 
@@ -139,6 +139,12 @@ function devMockResponse<T>(path: string, options?: RequestInit): T | null {
       payment_policy_name: null,
       return_policy_id: null,
       return_policy_name: null,
+      shipping_service: null,
+      shipping_cost: null,
+      handling_time_days: null,
+      returns_accepted: null,
+      return_period_days: null,
+      return_shipping_cost_payer: null,
       last_synced_at: null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -163,18 +169,42 @@ function devMockResponse<T>(path: string, options?: RequestInit): T | null {
         DEV_EBAY_PUBLISH_SETTINGS.available_policies.return.find(
           (policy) => policy.id === body.return_policy_id,
         )?.name ?? null,
+      shipping_service: body.shipping_service ?? null,
+      shipping_cost: body.shipping_cost ?? null,
+      handling_time_days: body.handling_time_days ?? null,
+      returns_accepted: body.returns_accepted ?? null,
+      return_period_days: body.return_period_days ?? null,
+      return_shipping_cost_payer: body.return_shipping_cost_payer ?? null,
       updated_at: new Date().toISOString(),
       last_synced_at: new Date().toISOString(),
     };
+    const hasPolicies =
+      Boolean(DEV_EBAY_PUBLISH_SETTINGS.settings?.fulfillment_policy_id) &&
+      Boolean(DEV_EBAY_PUBLISH_SETTINGS.settings?.payment_policy_id) &&
+      Boolean(DEV_EBAY_PUBLISH_SETTINGS.settings?.return_policy_id);
+    const hasFallback =
+      Boolean(DEV_EBAY_PUBLISH_SETTINGS.settings?.shipping_service) &&
+      DEV_EBAY_PUBLISH_SETTINGS.settings?.shipping_cost != null &&
+      DEV_EBAY_PUBLISH_SETTINGS.settings?.handling_time_days != null &&
+      DEV_EBAY_PUBLISH_SETTINGS.settings?.returns_accepted != null &&
+      (!DEV_EBAY_PUBLISH_SETTINGS.settings?.returns_accepted ||
+        (DEV_EBAY_PUBLISH_SETTINGS.settings?.return_period_days != null &&
+          Boolean(
+            DEV_EBAY_PUBLISH_SETTINGS.settings
+              ?.return_shipping_cost_payer,
+          )));
+
+    DEV_EBAY_PUBLISH_SETTINGS.publish_strategy = hasPolicies
+      ? "business_policies"
+      : hasFallback
+        ? "snapcard_defaults"
+        : "incomplete";
     DEV_EBAY_PUBLISH_SETTINGS.readiness = {
       ready:
         Boolean(
           DEV_EBAY_PUBLISH_SETTINGS.settings?.location ||
             DEV_EBAY_PUBLISH_SETTINGS.settings?.postal_code,
-        ) &&
-        Boolean(DEV_EBAY_PUBLISH_SETTINGS.settings?.fulfillment_policy_id) &&
-        Boolean(DEV_EBAY_PUBLISH_SETTINGS.settings?.payment_policy_id) &&
-        Boolean(DEV_EBAY_PUBLISH_SETTINGS.settings?.return_policy_id),
+        ) && (hasPolicies || hasFallback),
       missing: [],
     };
 
@@ -186,19 +216,51 @@ function devMockResponse<T>(path: string, options?: RequestInit): T | null {
         "Add a seller location or postal code.",
       );
     }
-    if (!DEV_EBAY_PUBLISH_SETTINGS.settings?.fulfillment_policy_id) {
+    if (!hasPolicies && !DEV_EBAY_PUBLISH_SETTINGS.settings?.shipping_service) {
       DEV_EBAY_PUBLISH_SETTINGS.readiness.missing.push(
-        "Select a default fulfillment policy.",
+        "Choose a default shipping service for SnapCard fallback.",
       );
     }
-    if (!DEV_EBAY_PUBLISH_SETTINGS.settings?.payment_policy_id) {
+    if (
+      !hasPolicies &&
+      DEV_EBAY_PUBLISH_SETTINGS.settings?.shipping_cost == null
+    ) {
       DEV_EBAY_PUBLISH_SETTINGS.readiness.missing.push(
-        "Select a default payment policy.",
+        "Set a default shipping cost for SnapCard fallback.",
       );
     }
-    if (!DEV_EBAY_PUBLISH_SETTINGS.settings?.return_policy_id) {
+    if (
+      !hasPolicies &&
+      DEV_EBAY_PUBLISH_SETTINGS.settings?.handling_time_days == null
+    ) {
       DEV_EBAY_PUBLISH_SETTINGS.readiness.missing.push(
-        "Select a default return policy.",
+        "Set a handling time for SnapCard fallback.",
+      );
+    }
+    if (
+      !hasPolicies &&
+      DEV_EBAY_PUBLISH_SETTINGS.settings?.returns_accepted == null
+    ) {
+      DEV_EBAY_PUBLISH_SETTINGS.readiness.missing.push(
+        "Choose whether you accept returns in SnapCard fallback.",
+      );
+    }
+    if (
+      !hasPolicies &&
+      DEV_EBAY_PUBLISH_SETTINGS.settings?.returns_accepted === true &&
+      DEV_EBAY_PUBLISH_SETTINGS.settings?.return_period_days == null
+    ) {
+      DEV_EBAY_PUBLISH_SETTINGS.readiness.missing.push(
+        "Choose a return window for SnapCard fallback.",
+      );
+    }
+    if (
+      !hasPolicies &&
+      DEV_EBAY_PUBLISH_SETTINGS.settings?.returns_accepted === true &&
+      !DEV_EBAY_PUBLISH_SETTINGS.settings?.return_shipping_cost_payer
+    ) {
+      DEV_EBAY_PUBLISH_SETTINGS.readiness.missing.push(
+        "Choose who pays return shipping in SnapCard fallback.",
       );
     }
 

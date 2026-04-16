@@ -211,6 +211,52 @@ describe("ebayTradingApi OAuth transport", () => {
     expect(request.body).toContain("<ConditionDescriptor>");
   });
 
+  it("falls back to inline shipping and return settings when seller profiles are not provided", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        `<?xml version="1.0" encoding="utf-8"?>
+<VerifyAddItemResponse xmlns="urn:ebay:apis:eBLBaseComponents">
+  <Ack>Success</Ack>
+</VerifyAddItemResponse>`,
+        {
+          status: 200,
+          headers: { "Content-Type": "text/xml" },
+        },
+      ),
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await verifyAddItem(
+      buildListingData({
+        seller_profiles: undefined,
+        manual_shipping: {
+          shipping_service: "CA_PostExpeditedParcel",
+          shipping_cost: 2.5,
+          handling_time_days: 2,
+        },
+        manual_return_policy: {
+          returns_accepted: true,
+          return_period_days: 30,
+          return_shipping_cost_payer: "Buyer",
+        },
+      }),
+      "oauth-user-token",
+      "EBAY_CA",
+    );
+
+    const [, request] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(request.body).not.toContain("<SellerProfiles>");
+    expect(request.body).toContain("<ShippingDetails>");
+    expect(request.body).toContain("<ShippingService>CA_PostExpeditedParcel</ShippingService>");
+    expect(request.body).toContain("<ShippingServiceCost>2.5</ShippingServiceCost>");
+    expect(request.body).toContain("<DispatchTimeMax>2</DispatchTimeMax>");
+    expect(request.body).toContain("<ReturnPolicy>");
+    expect(request.body).toContain("<ReturnsAcceptedOption>ReturnsAccepted</ReturnsAcceptedOption>");
+    expect(request.body).toContain("<ReturnsWithinOption>Days_30</ReturnsWithinOption>");
+    expect(request.body).toContain("<ShippingCostPaidByOption>Buyer</ShippingCostPaidByOption>");
+  });
+
   it("fails early when no seller location is provided", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);

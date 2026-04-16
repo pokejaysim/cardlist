@@ -95,7 +95,11 @@ export async function processPublishJob(jobData: {
       listingRow.user_id,
       ebayPhotoUrls,
     );
-    const { itemId } = await addItem(listingData, token);
+    const { itemId } = await addItem(
+      listingData,
+      token,
+      listingData.marketplaceId,
+    );
 
     // 6. Update listing as published
     const { error: publishErr } = await supabase
