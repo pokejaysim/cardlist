@@ -19,7 +19,6 @@ import {
   Sparkles,
   Save,
   PenLine,
-  Lock,
   Search,
 } from "lucide-react";
 import type { PokemonTcgCardDetail, EbayMarketplace } from "../../../shared/types";
@@ -370,33 +369,18 @@ export default function CreateListing() {
               </Button>
 
               <div className="flex gap-3">
-                {usage?.ai_identify ? (
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setStep("identify");
-                      handleIdentify();
-                    }}
-                    disabled={photos.length === 0}
-                    className="flex-1"
-                  >
-                    Auto-Identify with AI
-                    <Sparkles className="ml-1.5 size-4" />
-                  </Button>
-                ) : (
-                  <Button
-                    variant="outline"
-                    disabled
-                    className="relative flex-1 opacity-60"
-                    onClick={() => setShowUpgrade(true)}
-                  >
-                    Auto-Identify with AI
-                    <Lock className="ml-1.5 size-4" />
-                    <Badge className="absolute -right-2 -top-2 text-[10px]">
-                      Pro
-                    </Badge>
-                  </Button>
-                )}
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setStep("identify");
+                    handleIdentify();
+                  }}
+                  disabled={photos.length === 0}
+                  className="flex-1"
+                >
+                  Auto-Identify with AI
+                  <Sparkles className="ml-1.5 size-4" />
+                </Button>
 
                 <Button
                   variant="outline"
