@@ -4,6 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import {
   LayoutDashboard,
   PlusCircle,
+  Layers,
   User,
   LogOut,
   Menu,
@@ -13,6 +14,7 @@ import {
 const NAV_ITEMS = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/listings/new", label: "New Listing", icon: PlusCircle },
+  { to: "/listings/batch", label: "Batch Upload", icon: Layers },
   { to: "/account", label: "Account", icon: User },
 ] as const;
 
@@ -75,7 +77,7 @@ export default function Layout() {
             <NavLink
               key={to}
               to={to}
-              end={to === "/listings/new"}
+              end={to.startsWith("/listings/")}
               onClick={handleNavClick}
               className={({ isActive }) =>
                 `flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition ${

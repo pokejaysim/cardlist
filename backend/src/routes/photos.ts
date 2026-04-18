@@ -69,6 +69,34 @@ router.post(
   }
 );
 
+// Upload a standalone photo (not tied to a listing yet)
+// Used by the batch upload flow — returns Cloudinary URL for identification
+router.post(
+  "/photos/upload",
+  requireAuth,
+  upload.single("photo"),
+  async (req, res) => {
+    const authReq = req as AuthenticatedRequest;
+    const file = req.file;
+
+    if (!file) {
+      res.status(400).json({ error: "No photo uploaded" });
+      return;
+    }
+
+    try {
+      const { url } = await uploadPhoto(
+        file.buffer,
+        `batch/${authReq.userId}`,
+      );
+      res.status(201).json({ url });
+    } catch (err) {
+      console.error("Standalone photo upload failed:", err);
+      res.status(500).json({ error: "Photo upload failed", code: "UPLOAD_ERROR" });
+    }
+  },
+);
+
 // Get photos for a listing
 router.get("/photos/:listing_id", requireAuth, async (req, res) => {
   const authReq = req as AuthenticatedRequest;

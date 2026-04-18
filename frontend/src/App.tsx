@@ -8,6 +8,7 @@ import Login from "@/pages/Login";
 import Register from "@/pages/Register";
 import Dashboard from "@/pages/Dashboard";
 import CreateListing from "@/pages/CreateListing";
+import BatchUpload from "@/pages/BatchUpload";
 import ListingDetail from "@/pages/ListingDetail";
 import Onboarding from "@/pages/Onboarding";
 import EbayCallback from "@/pages/EbayCallback";
@@ -61,6 +62,7 @@ function App() {
           >
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/listings/new" element={<CreateListing />} />
+            <Route path="/listings/batch" element={<BatchUpload />} />
             <Route path="/listings/:id" element={<ListingDetail />} />
             <Route path="/account" element={<Account />} />
           </Route>
