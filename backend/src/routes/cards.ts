@@ -20,7 +20,8 @@ router.post("/cards/identify", requireAuth, requirePlan("ai_identify"), async (r
     res.json(result);
   } catch (err) {
     console.error("Card identification failed:", err);
-    res.status(500).json({ error: "Card identification failed", code: "VISION_ERROR" });
+    const message = err instanceof Error ? err.message : "Card identification failed";
+    res.status(500).json({ error: message, code: "VISION_ERROR" });
   }
 });
 
