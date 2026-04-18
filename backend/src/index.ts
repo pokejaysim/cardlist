@@ -17,6 +17,16 @@ import { sendListingPublishedEmail, sendListingErrorEmail } from "./services/ema
 const app = express();
 const port = process.env.PORT ?? 3001;
 
+// Startup diagnostic — verify critical env vars are loaded by the running process.
+// Logs length only, not the key itself.
+console.log(
+  `[Startup] ANTHROPIC_API_KEY: ${
+    process.env.ANTHROPIC_API_KEY
+      ? `present (length=${String(process.env.ANTHROPIC_API_KEY.length)})`
+      : "MISSING"
+  }`,
+);
+
 const allowedOrigins = [
   process.env.FRONTEND_URL,
   "http://localhost:5173",
