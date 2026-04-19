@@ -75,6 +75,29 @@ const IDENTIFY_CARD_TOOL: Anthropic.Tool = {
   },
 };
 
+type ImageSource = Anthropic.ImageBlockParam["source"];
+
+/**
+ * Build the appropriate Anthropic image source.
+ * Data URLs (`data:image/jpeg;base64,...`) must be sent as base64 — passing
+ * them as `type:"url"` makes Anthropic try to HTTP-fetch the data URL and fail
+ * with "Unable to download the file."
+ */
+function imageSourceFor(imageUrl: string): ImageSource {
+  if (imageUrl.startsWith("data:")) {
+    const match = /^data:([^;]+);base64,(.+)$/.exec(imageUrl);
+    if (!match?.[1] || !match[2]) {
+      throw new Error("Invalid data URL — expected base64-encoded image");
+    }
+    return {
+      type: "base64",
+      media_type: match[1] as "image/jpeg" | "image/png" | "image/gif" | "image/webp",
+      data: match[2],
+    };
+  }
+  return { type: "url", url: imageUrl };
+}
+
 export async function identifyCard(
   imageUrl: string
 ): Promise<CardIdentificationResult> {
@@ -89,7 +112,7 @@ export async function identifyCard(
         content: [
           {
             type: "image",
-            source: { type: "url", url: imageUrl },
+            source: imageSourceFor(imageUrl),
           },
           {
             type: "text",
