@@ -38,11 +38,19 @@ export default function BatchUpload() {
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
   const [createdCount, setCreatedCount] = useState(0);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
 
-  async function handleFilesSelected(e: React.ChangeEvent<HTMLInputElement>) {
-    if (!e.target.files) return;
-    const files = Array.from(e.target.files).slice(0, MAX_BATCH_SIZE - cards.length);
-    if (files.length === 0) return;
+  async function uploadFiles(fileList: File[]) {
+    // Only accept images — browsers will happily hand us folders or other files
+    // on drop, so filter here rather than relying on the input's accept attr.
+    const imageFiles = fileList.filter((f) => f.type.startsWith("image/"));
+    const files = imageFiles.slice(0, MAX_BATCH_SIZE - cards.length);
+    if (files.length === 0) {
+      if (fileList.length > 0 && imageFiles.length === 0) {
+        setError("Only image files are supported.");
+      }
+      return;
+    }
 
     setError("");
     setUploading(true);
@@ -99,6 +107,34 @@ export default function BatchUpload() {
 
     setUploading(false);
     if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  function handleFilesSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    if (!e.target.files) return;
+    void uploadFiles(Array.from(e.target.files));
+  }
+
+  function handleDragOver(e: React.DragEvent<HTMLLabelElement>) {
+    // preventDefault is required — without it the browser ignores the drop
+    // and falls back to "open the file in a new tab" on drop.
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isDraggingOver) setIsDraggingOver(true);
+  }
+
+  function handleDragLeave(e: React.DragEvent<HTMLLabelElement>) {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(false);
+  }
+
+  function handleDrop(e: React.DragEvent<HTMLLabelElement>) {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(false);
+    if (uploading) return;
+    const dropped = Array.from(e.dataTransfer.files);
+    if (dropped.length > 0) void uploadFiles(dropped);
   }
 
   async function handleIdentifyAll() {
@@ -239,15 +275,29 @@ export default function BatchUpload() {
       {cards.length === 0 && (
         <Card className="mb-6">
           <CardContent className="py-10">
-            <label className="flex cursor-pointer flex-col items-center gap-3 rounded-lg border-2 border-dashed border-muted-foreground/25 p-10 transition hover:border-muted-foreground/50">
+            <label
+              onDragOver={handleDragOver}
+              onDragEnter={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              className={`flex cursor-pointer flex-col items-center gap-3 rounded-lg border-2 border-dashed p-10 transition ${
+                isDraggingOver
+                  ? "border-primary bg-primary/5"
+                  : "border-muted-foreground/25 hover:border-muted-foreground/50"
+              }`}
+            >
               {uploading ? (
                 <Loader2 className="size-10 animate-spin text-muted-foreground" />
               ) : (
-                <Upload className="size-10 text-muted-foreground" />
+                <Upload className={`size-10 ${isDraggingOver ? "text-primary" : "text-muted-foreground"}`} />
               )}
               <div className="text-center">
                 <p className="font-medium">
-                  {uploading ? "Uploading..." : "Drop photos here or click to select"}
+                  {uploading
+                    ? "Uploading..."
+                    : isDraggingOver
+                      ? "Drop to upload"
+                      : "Drop photos here or click to select"}
                 </p>
                 <p className="mt-1 text-sm text-muted-foreground">
                   JPG or PNG, up to {String(MAX_BATCH_SIZE)} photos
