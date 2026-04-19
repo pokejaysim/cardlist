@@ -345,6 +345,17 @@ export default function CreateListing() {
         <Card>
           <CardHeader>
             <CardTitle>Upload Card Photos</CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Upload photos of <span className="font-medium">one card</span> (front, back, etc.). Listing multiple different cards?{" "}
+              <button
+                type="button"
+                onClick={() => navigate("/listings/batch")}
+                className="font-medium text-primary underline-offset-2 hover:underline"
+              >
+                Use Batch Upload
+              </button>{" "}
+              instead.
+            </p>
           </CardHeader>
           <CardContent className="space-y-4">
             <PhotoUploader
