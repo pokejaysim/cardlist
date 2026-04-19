@@ -27,6 +27,11 @@ console.log(`[Startup] ANTHROPIC_API_KEY: ${envReport("ANTHROPIC_API_KEY")}`);
 console.log(`[Startup] CLOUDINARY_CLOUD_NAME: ${envReport("CLOUDINARY_CLOUD_NAME")}`);
 console.log(`[Startup] CLOUDINARY_API_KEY: ${envReport("CLOUDINARY_API_KEY")}`);
 console.log(`[Startup] CLOUDINARY_API_SECRET: ${envReport("CLOUDINARY_API_SECRET")}`);
+console.log(`[Startup] PRICECHARTING_API_KEY: ${envReport("PRICECHARTING_API_KEY")}`);
+console.log(`[Startup] EBAY_APP_ID: ${envReport("EBAY_APP_ID")}`);
+console.log(
+  `[Startup] USD_TO_CAD_RATE: ${process.env.USD_TO_CAD_RATE ?? "(unset, default 1.37)"}`,
+);
 
 const allowedOrigins = [
   process.env.FRONTEND_URL,

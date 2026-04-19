@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { apiFetch } from "@/lib/api";
-import { DollarSign, Loader2, TrendingUp } from "lucide-react";
+import { DollarSign, Loader2, TrendingUp, AlertTriangle, Info } from "lucide-react";
 
 interface EbayComp {
   title: string;
@@ -13,12 +13,24 @@ interface EbayComp {
   sold_date: string;
 }
 
+type SourceStatus =
+  | { state: "ok" }
+  | { state: "no_key" }
+  | { state: "api_error"; message: string }
+  | { state: "not_found"; query: string };
+
 interface PriceSuggestionResult {
-  suggested_price_cad: number;
+  suggested_price_cad: number | null;
   pricechart_price: number | null;
   ebay_avg_price: number | null;
   ebay_comps: EbayComp[];
   reasoning: string;
+  sources?: {
+    pricecharting: SourceStatus;
+    ebay: SourceStatus;
+    fx_rate_usd_to_cad: number;
+    condition_applied: string;
+  };
 }
 
 interface PricingSuggestionProps {
@@ -58,7 +70,7 @@ export function PricingSuggestion({
       });
 
       setResult(data);
-      if (data.suggested_price_cad > 0) {
+      if (data.suggested_price_cad !== null && data.suggested_price_cad > 0) {
         onPriceChange(data.suggested_price_cad.toFixed(2));
       }
     } catch (err) {
@@ -108,27 +120,49 @@ export function PricingSuggestion({
       {result && (
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Price Research</CardTitle>
+            <CardTitle className="flex items-center justify-between text-sm">
+              <span>Price Research</span>
+              {result.sources?.condition_applied && (
+                <span className="rounded bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                  {result.sources.condition_applied} adjusted
+                </span>
+              )}
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
-            {/* Sources */}
+            {/* Admin-visible banner when pricing sources aren't configured.
+                This is the most likely cause of an empty price research card
+                — surface it loudly instead of making the user guess. */}
+            {result.sources?.pricecharting.state === "no_key" &&
+              result.sources.ebay.state === "no_key" && (
+                <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-50 p-2.5 text-amber-900">
+                  <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                  <div className="space-y-1">
+                    <p className="font-medium">Pricing sources not configured</p>
+                    <p className="text-xs">
+                      Neither PriceCharting nor eBay is reachable — add
+                      <code className="mx-1 rounded bg-amber-100 px-1">PRICECHARTING_API_KEY</code>
+                      and
+                      <code className="mx-1 rounded bg-amber-100 px-1">EBAY_APP_ID</code>
+                      in Railway, then redeploy.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+            {/* Per-source status — only shown when at least one is ok so the
+                user can see which source contributed vs which one missed. */}
             <div className="grid grid-cols-2 gap-3">
-              {result.pricechart_price !== null && (
-                <div className="rounded-md bg-muted p-2.5">
-                  <p className="text-xs text-muted-foreground">PriceCharting</p>
-                  <p className="font-medium">
-                    ${result.pricechart_price.toFixed(2)} CAD
-                  </p>
-                </div>
-              )}
-              {result.ebay_avg_price !== null && (
-                <div className="rounded-md bg-muted p-2.5">
-                  <p className="text-xs text-muted-foreground">eBay Avg Sold</p>
-                  <p className="font-medium">
-                    ${result.ebay_avg_price.toFixed(2)} CAD
-                  </p>
-                </div>
-              )}
+              <SourceTile
+                label="PriceCharting"
+                priceCad={result.pricechart_price}
+                status={result.sources?.pricecharting}
+              />
+              <SourceTile
+                label="eBay Avg Sold"
+                priceCad={result.ebay_avg_price}
+                status={result.sources?.ebay}
+              />
             </div>
 
             {/* Reasoning */}
@@ -160,4 +194,65 @@ export function PricingSuggestion({
       )}
     </div>
   );
+}
+
+/**
+ * Renders a single price source (PriceCharting or eBay). If the source had
+ * a price, shows it. Otherwise shows a compact, source-specific reason so
+ * the user can tell "no data" from "not configured" from "temporary error".
+ */
+function SourceTile({
+  label,
+  priceCad,
+  status,
+}: {
+  label: string;
+  priceCad: number | null;
+  status: SourceStatus | undefined;
+}) {
+  if (priceCad !== null) {
+    return (
+      <div className="rounded-md bg-muted p-2.5">
+        <p className="text-xs text-muted-foreground">{label}</p>
+        <p className="font-medium">${priceCad.toFixed(2)} CAD</p>
+      </div>
+    );
+  }
+
+  // No price — explain why.
+  const { text, tone } = describeStatus(status);
+  const toneClass =
+    tone === "error"
+      ? "border-destructive/30 text-destructive"
+      : tone === "warn"
+        ? "border-amber-500/30 text-amber-900 bg-amber-50"
+        : "border-muted text-muted-foreground";
+
+  return (
+    <div className={`rounded-md border p-2.5 ${toneClass}`}>
+      <p className="text-xs opacity-80">{label}</p>
+      <p className="flex items-start gap-1.5 text-xs font-medium">
+        <Info className="mt-0.5 size-3 shrink-0" />
+        <span>{text}</span>
+      </p>
+    </div>
+  );
+}
+
+function describeStatus(
+  status: SourceStatus | undefined,
+): { text: string; tone: "neutral" | "warn" | "error" } {
+  if (!status) return { text: "Unavailable", tone: "neutral" };
+  switch (status.state) {
+    case "ok":
+      // Source returned ok but no usable price (e.g. eBay comps were all in
+      // unsupported currencies). Rare, fall back to neutral.
+      return { text: "No usable price", tone: "neutral" };
+    case "no_key":
+      return { text: "Not configured", tone: "warn" };
+    case "api_error":
+      return { text: "Temporary error", tone: "error" };
+    case "not_found":
+      return { text: "No match found", tone: "neutral" };
+  }
 }

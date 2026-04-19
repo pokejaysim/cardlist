@@ -7,6 +7,16 @@ export interface EbayCompResult {
 }
 
 /**
+ * Discriminated-union result so callers can tell "not configured" apart from
+ * "API failed" apart from "genuinely no comps found for this card".
+ */
+export type EbayCompsLookup =
+  | { status: "no_key" }
+  | { status: "api_error"; message: string }
+  | { status: "not_found"; query: string }
+  | { status: "ok"; comps: EbayCompResult[] };
+
+/**
  * Shape of a single item from the eBay Finding API findCompletedItems response.
  * Only the fields we actually use are typed here.
  */
@@ -36,21 +46,22 @@ interface EbayFindingResponse {
 
 /**
  * Fetch recent eBay sold comps for a card using the Finding API (findCompletedItems).
- * Returns an empty array if the eBay App ID is not configured or the request fails.
+ * Returns a tagged status so the UI can distinguish config / API / no-results problems.
  */
 export async function fetchEbayComps(
   cardName: string,
   setName: string | null,
-  _condition: string | null
-): Promise<EbayCompResult[]> {
+  _condition: string | null,
+): Promise<EbayCompsLookup> {
   const appId = process.env.EBAY_APP_ID;
   if (!appId) {
-    return [];
+    console.warn("[ebayComps] EBAY_APP_ID is not set");
+    return { status: "no_key" };
   }
 
-  try {
-    const keywords = setName ? `${cardName} ${setName}` : cardName;
+  const keywords = setName ? `${cardName} ${setName}` : cardName;
 
+  try {
     const url = new URL("https://svcs.ebay.com/services/search/FindingService/v1");
     url.searchParams.set("OPERATION-NAME", "findCompletedItems");
     url.searchParams.set("SERVICE-VERSION", "1.13.0");
@@ -64,8 +75,9 @@ export async function fetchEbayComps(
 
     const response = await fetch(url.toString());
     if (!response.ok) {
-      console.error(`eBay Finding API error: ${response.status} ${response.statusText}`);
-      return [];
+      const message = `HTTP ${String(response.status)} ${response.statusText}`;
+      console.error(`[ebayComps] API error: ${message}`);
+      return { status: "api_error", message };
     }
 
     const data = (await response.json()) as EbayFindingResponse;
@@ -75,7 +87,7 @@ export async function fetchEbayComps(
     const items = searchResult?.item;
 
     if (!items || items.length === 0) {
-      return [];
+      return { status: "not_found", query: keywords };
     }
 
     const results: EbayCompResult[] = [];
@@ -107,10 +119,14 @@ export async function fetchEbayComps(
       });
     }
 
-    return results;
+    if (results.length === 0) {
+      return { status: "not_found", query: keywords };
+    }
+
+    return { status: "ok", comps: results };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error("eBay comps lookup failed:", message);
-    return [];
+    console.error("[ebayComps] Lookup failed:", message);
+    return { status: "api_error", message };
   }
 }
