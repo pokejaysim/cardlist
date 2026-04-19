@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { verifyPokemonCard } from "../cardVerifier.js";
 
 const anthropic = new Anthropic();
 
@@ -116,11 +117,18 @@ export async function identifyCard(
           },
           {
             type: "text",
-            text: `Identify this trading card. Look at the card name, set/expansion, collector number, rarity symbol, language, and estimate the physical condition based on visible wear on edges, corners, and surface.
+            text: `Identify this trading card.
 
-If you can read the card details clearly, report them exactly as printed. If anything is unclear, make your best estimate and lower the confidence score.
+**Priority order for accuracy** (most important first):
+1. **Card name** — exactly as printed.
+2. **Card number** — the collector number in the bottom-left or bottom-right (e.g. "041/217", "4/102", "TG05/TG30"). Report it EXACTLY as printed including any set total (e.g. "/217"). This is critical — we use it to verify the set.
+3. **Condition** — based on visible wear on edges, corners, and surface.
+4. **Set / expansion** — the hardest to identify from a photo. Look at the set symbol (small icon near the card number) and the copyright/era text at the bottom. If you cannot clearly identify the set, make your best guess but lower the overall confidence score accordingly — it is better to be uncertain than to confidently guess wrong.
+5. **Rarity, language** — from the card's rarity symbol and printed language.
 
-This could be a Pokemon card, Yu-Gi-Oh card, Magic: The Gathering card, sports card (baseball, basketball, football, hockey), or any other collectible trading card. Identify the type and report accordingly.`,
+If you can read the card details clearly, report them exactly as printed. If anything is unclear, lower the confidence score.
+
+This could be a Pokemon card, Yu-Gi-Oh card, Magic: The Gathering card, sports card, or another collectible trading card. Identify the type and report accordingly.`,
           },
         ],
       },
@@ -135,5 +143,30 @@ This could be a Pokemon card, Yu-Gi-Oh card, Magic: The Gathering card, sports c
     throw new Error("Claude did not return card identification");
   }
 
-  return toolBlock.input as CardIdentificationResult;
+  const result = toolBlock.input as CardIdentificationResult;
+
+  // Cross-check Pokemon set name against the authoritative Pokemon TCG database.
+  // Opus reads card names and numbers accurately but often misidentifies sets
+  // (especially promos / pin collections). Looking up name + number in the TCG
+  // database gives us the correct set name almost for free.
+  if (result.card_game === "pokemon" && result.card_name && result.card_number) {
+    const verified = await verifyPokemonCard(result.card_name, result.card_number);
+    if (verified) {
+      const originalSet = result.set_name;
+      result.set_name = verified.set_name;
+      // If DB had authoritative rarity and Opus's value is generic/empty, use DB's
+      if (verified.rarity && (!result.rarity || result.rarity.toLowerCase() === "common")) {
+        result.rarity = verified.rarity;
+      }
+      // Bump confidence toward the verification's confidence (weighted average)
+      result.confidence = Math.min(1, (result.confidence + verified.confidence) / 2);
+      if (originalSet !== verified.set_name) {
+        console.log(
+          `[vision] Set corrected: "${originalSet}" → "${verified.set_name}" (match_count=${String(verified.match_count)})`,
+        );
+      }
+    }
+  }
+
+  return result;
 }
