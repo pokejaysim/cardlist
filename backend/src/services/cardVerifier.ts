@@ -73,6 +73,33 @@ export interface VerificationResult {
 }
 
 /**
+ * Extract candidate English names from the raw card_name Opus returned.
+ * Opus often returns foreign-language cards as "ニョロモ (Poliwag)" — we want
+ * to try both the raw name and the parenthetical English name against the
+ * Pokemon TCG database (which is English-dominant).
+ */
+function extractNameCandidates(rawName: string): string[] {
+  const names: string[] = [];
+  const primary = rawName.replace(/"/g, "").trim();
+  if (primary) names.push(primary);
+
+  // "ニョロモ (Poliwag)" → also try "Poliwag"
+  const parenMatch = /\(([^)]+)\)/.exec(primary);
+  if (parenMatch?.[1]) {
+    const inside = parenMatch[1].trim();
+    if (inside && inside !== primary) names.push(inside);
+  }
+
+  // "Poliwag (ニョロモ)" → also try "Poliwag" (the part before the parens)
+  const beforeParen = primary.replace(/\s*\([^)]*\)\s*$/, "").trim();
+  if (beforeParen && beforeParen !== primary && !names.includes(beforeParen)) {
+    names.push(beforeParen);
+  }
+
+  return names;
+}
+
+/**
  * Look up a Pokemon card by name + number to get the authoritative set name.
  * Returns null if no match found or the API is unreachable.
  */
@@ -85,27 +112,30 @@ export async function verifyPokemonCard(
   const { number, setTotal } = parseCardNumber(cardNumber);
   if (!number) return null;
 
-  // Sanitize card name for query — remove quotes and trim
-  const nameClean = cardName.replace(/"/g, "").trim();
-  if (!nameClean) return null;
+  const nameCandidates = extractNameCandidates(cardName);
+  if (nameCandidates.length === 0) return null;
 
   try {
-    // First attempt: name + number + setTotal (most specific)
     let candidates: PtcgCard[] = [];
-    if (setTotal) {
-      candidates = await queryTcg(
-        `name:"${nameClean}" number:${number} (set.printedTotal:${String(setTotal)} OR set.total:${String(setTotal)})`,
-      );
-    }
 
-    // Fallback 1: name + number (no setTotal constraint)
-    if (candidates.length === 0) {
-      candidates = await queryTcg(`name:"${nameClean}" number:${number}`);
-    }
+    // Try each name candidate through the query ladder (strictest → loosest)
+    // until we get a hit.
+    for (const name of nameCandidates) {
+      // Strictest: exact name + number + setTotal
+      if (setTotal) {
+        candidates = await queryTcg(
+          `name:"${name}" number:${number} (set.printedTotal:${String(setTotal)} OR set.total:${String(setTotal)})`,
+        );
+        if (candidates.length > 0) break;
+      }
 
-    // Fallback 2: looser name match (without quotes, e.g. matches "Charizard VMAX" for "Charizard")
-    if (candidates.length === 0) {
-      candidates = await queryTcg(`name:${nameClean} number:${number}`);
+      // Exact name + number
+      candidates = await queryTcg(`name:"${name}" number:${number}`);
+      if (candidates.length > 0) break;
+
+      // Loose name + number (matches "Charizard VMAX" for "Charizard")
+      candidates = await queryTcg(`name:${name} number:${number}`);
+      if (candidates.length > 0) break;
     }
 
     if (candidates.length === 0) return null;

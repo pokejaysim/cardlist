@@ -24,7 +24,7 @@ const IDENTIFY_CARD_TOOL: Anthropic.Tool = {
       card_name: {
         type: "string",
         description:
-          "The full name of the card (e.g., 'Charizard', 'Dark Magician', 'Mike Trout').",
+          "The full name of the card (e.g., 'Charizard', 'Dark Magician', 'Mike Trout'). For cards printed in non-English languages, format as 'NativeName (EnglishName)' — e.g. 'ニョロモ (Poliwag)', 'リザードン (Charizard)'. The English name in parentheses is important for database lookup.",
       },
       set_name: {
         type: "string",
