@@ -46,6 +46,7 @@ interface PriceSuggestionResult {
 interface PricingSuggestionProps {
   cardName: string;
   setName: string | null;
+  cardNumber: string | null;
   condition: string | null;
   listingId?: string;
   price: string;
@@ -55,6 +56,7 @@ interface PricingSuggestionProps {
 export function PricingSuggestion({
   cardName,
   setName,
+  cardNumber,
   condition,
   listingId,
   price,
@@ -74,6 +76,7 @@ export function PricingSuggestion({
         body: JSON.stringify({
           card_name: cardName,
           set_name: setName,
+          card_number: cardNumber,
           condition,
           listing_id: listingId,
         }),

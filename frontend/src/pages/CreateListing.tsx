@@ -683,6 +683,7 @@ export default function CreateListing() {
             <PricingSuggestion
               cardName={card.card_name}
               setName={card.set_name || null}
+              cardNumber={card.card_number || null}
               condition={card.condition || null}
               price={price}
               onPriceChange={setPrice}

@@ -30,6 +30,7 @@ function getUsdToCadRate(): number {
 interface SuggestRequestBody {
   card_name: string;
   set_name?: string;
+  card_number?: string;
   condition?: string;
   listing_id?: string;
 }
@@ -89,12 +90,13 @@ router.post("/pricing/suggest", requireAuth, requirePlan("pricing_suggestions"),
 
   const cardName = body.card_name;
   const setName = body.set_name ?? null;
+  const cardNumber = body.card_number ?? null;
   const condition = body.condition ?? null;
   const USD_TO_CAD = getUsdToCadRate();
 
   // Fetch pricing data from both sources in parallel
   const [pcLookup, ebayLookup] = await Promise.all([
-    searchPriceCharting(cardName, setName, condition),
+    searchPriceCharting(cardName, setName, condition, cardNumber),
     fetchEbayComps(cardName, setName, condition),
   ]);
 

@@ -91,7 +91,55 @@ function parseConditionMultipliers(): Record<string, number> {
 }
 
 /**
+ * Normalize a user-facing card number (e.g. "149/182", "TG05/TG30", "4/102")
+ * into a bare number PriceCharting's search likes. Returns null if there's
+ * nothing usable.
+ *
+ * PriceCharting indexes card numbers as just the print number — "149" not
+ * "149/182". The slash-total confuses their search.
+ */
+function normalizeCardNumber(raw: string | null): string | null {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  // Split on slash and take the numerator (handles "149/182" → "149",
+  // "TG05/TG30" → "TG05").
+  const [first] = trimmed.split("/");
+  return first?.trim() || null;
+}
+
+/**
+ * Fire one PriceCharting product-search call with the given query string.
+ * Returns null (meaning "not found") when the API responds with no product,
+ * or throws with a tagged error when something infrastructural is wrong.
+ */
+async function fetchPriceChartingProduct(
+  apiKey: string,
+  query: string,
+): Promise<PriceChartingResponse | null> {
+  const url = new URL("https://www.pricecharting.com/api/product");
+  url.searchParams.set("t", apiKey);
+  url.searchParams.set("q", query);
+
+  const response = await fetch(url.toString());
+  if (!response.ok) {
+    throw new Error(`HTTP ${String(response.status)} ${response.statusText}`);
+  }
+  const data = (await response.json()) as PriceChartingResponse;
+  return data["product-name"] ? data : null;
+}
+
+/**
  * Search PriceCharting for a card's market price.
+ *
+ * Tries progressively broader queries so we match the correct card variant
+ * when a set has multiple prints of the same card (common in modern sets
+ * with Illustration Rares / Full Arts / Alt Arts sharing one name):
+ *
+ *   1. "cardName setName cardNumber"   — most specific
+ *   2. "cardName setName"              — fallback if specific match fails
+ *   3. "cardName"                      — last resort (only when no set)
+ *
  * Returns a PriceChartingLookup tagged with the reason for any non-ok result
  * so the UI can show an actionable error message instead of a generic "no data".
  */
@@ -99,6 +147,7 @@ export async function searchPriceCharting(
   cardName: string,
   setName: string | null,
   _condition: string | null,
+  cardNumber: string | null = null,
 ): Promise<PriceChartingLookup> {
   const apiKey = process.env.PRICECHARTING_API_KEY;
   if (!apiKey) {
@@ -106,28 +155,37 @@ export async function searchPriceCharting(
     return { status: "no_key" };
   }
 
-  const query = setName ? `${cardName} ${setName}` : cardName;
+  // Build ordered query candidates, most-specific first.
+  const normNumber = normalizeCardNumber(cardNumber);
+  const candidates: string[] = [];
+  if (setName && normNumber) candidates.push(`${cardName} ${setName} ${normNumber}`);
+  if (setName) candidates.push(`${cardName} ${setName}`);
+  candidates.push(cardName);
+
+  let data: PriceChartingResponse | null = null;
+  let matchedQuery = "";
 
   try {
-    const url = new URL("https://www.pricecharting.com/api/product");
-    url.searchParams.set("t", apiKey);
-    url.searchParams.set("q", query);
-
-    const response = await fetch(url.toString());
-    if (!response.ok) {
-      const message = `HTTP ${String(response.status)} ${response.statusText}`;
-      console.error(`[pricecharting] API error: ${message}`);
-      return { status: "api_error", message };
+    for (const q of candidates) {
+      const result = await fetchPriceChartingProduct(apiKey, q);
+      if (result) {
+        data = result;
+        matchedQuery = q;
+        console.log(`[pricecharting] Matched "${result["product-name"] ?? ""}" via query "${q}"`);
+        break;
+      }
     }
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[pricecharting] API error: ${message}`);
+    return { status: "api_error", message };
+  }
 
-    const data = (await response.json()) as PriceChartingResponse;
+  if (!data) {
+    return { status: "not_found", query: candidates[0] ?? cardName };
+  }
 
-    // PriceCharting returns a non-error response with no product name when the
-    // query matches no known product — surface that as a distinct status.
-    if (!data["product-name"]) {
-      return { status: "not_found", query };
-    }
-
+  try {
     // PriceCharting returns prices in cents — convert to dollars.
     const centsToDollars = (v: unknown): number | null =>
       typeof v === "number" && v > 0 ? v / 100 : null;
@@ -138,11 +196,11 @@ export async function searchPriceCharting(
     const productId = data.id !== undefined ? String(data.id) : null;
     const productUrl = productId
       ? `https://www.pricecharting.com/game/${productId}`
-      : `https://www.pricecharting.com/search-products?q=${encodeURIComponent(query)}&type=prices`;
+      : `https://www.pricecharting.com/search-products?q=${encodeURIComponent(matchedQuery)}&type=prices`;
 
     const result: PriceChartingResult = {
       product_id: productId,
-      product_name: data["product-name"],
+      product_name: data["product-name"] ?? cardName,
       console_name: data["console-name"] ?? null,
       product_url: productUrl,
       price_raw_usd: centsToDollars(data["loose-price"]),
@@ -162,7 +220,7 @@ export async function searchPriceCharting(
       result.price_graded_9_usd === null &&
       result.price_graded_10_usd === null
     ) {
-      return { status: "not_found", query };
+      return { status: "not_found", query: matchedQuery };
     }
 
     return { status: "ok", result };
