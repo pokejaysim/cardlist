@@ -356,12 +356,12 @@ export async function addItem(
   const response = await ebayTradingApi("AddItem", itemPayload, token, marketplaceId);
 
   const itemId = response["ItemID"];
-  if (typeof itemId !== "string") {
+  if (typeof itemId !== "string" && typeof itemId !== "number") {
     throw new Error("eBay AddItem: missing ItemID in response");
   }
 
   return {
-    itemId,
+    itemId: String(itemId),
     fees: parseFees(response),
   };
 }

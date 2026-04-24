@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  addItem,
   ebayTradingApi,
   getEbayUserId,
   verifyAddItem,
@@ -274,5 +275,30 @@ describe("ebayTradingApi OAuth transport", () => {
     );
 
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("accepts numeric ItemID values returned by AddItem XML parsing", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        `<?xml version="1.0" encoding="utf-8"?>
+<AddItemResponse xmlns="urn:ebay:apis:eBLBaseComponents">
+  <Ack>Success</Ack>
+  <ItemID>123456789012</ItemID>
+</AddItemResponse>`,
+        {
+          status: 200,
+          headers: { "Content-Type": "text/xml" },
+        },
+      ),
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      addItem(buildListingData(), "oauth-user-token"),
+    ).resolves.toEqual({
+      itemId: "123456789012",
+      fees: {},
+    });
   });
 });
