@@ -27,6 +27,7 @@ export interface BatchCard {
   file_url: string | null;
   status: BatchCardStatus;
   result: BatchCardResult | null;
+  price_cad?: string;
   error: string | null;
 }
 
@@ -177,6 +178,22 @@ function CardTile({
                   ))}
                 </div>
               </div>
+            </div>
+            <div>
+              <Label className="text-xs">Price (CAD)</Label>
+              <Input
+                inputMode="decimal"
+                value={card.price_cad ?? ""}
+                onChange={(e) =>
+                  onUpdateCard(card.id, { price_cad: e.target.value })
+                }
+                className="h-8 text-sm"
+                placeholder="0.00"
+              />
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Creates an eBay.ca draft with this photo attached. Empty prices
+                stay blocked by publish readiness.
+              </p>
             </div>
           </div>
         ) : card.status === "error" ? (

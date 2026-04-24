@@ -12,6 +12,9 @@ export interface EbayMarketplaceConfig {
   categoryDefault: string;
 }
 
+export const CANADA_BETA_MARKETPLACE_ID = "EBAY_CA";
+export const CANADA_BETA_CURRENCY_CODE = "CAD";
+
 export const EBAY_MARKETPLACES: Record<string, EbayMarketplaceConfig> = {
   EBAY_CA: {
     marketplaceId: "EBAY_CA",
@@ -32,6 +35,10 @@ export const EBAY_MARKETPLACES: Record<string, EbayMarketplaceConfig> = {
 };
 
 export const SUPPORTED_MARKETPLACES = Object.keys(EBAY_MARKETPLACES);
+
+export function isCanadaBetaMarketplace(marketplaceId?: string | null): boolean {
+  return (marketplaceId ?? CANADA_BETA_MARKETPLACE_ID) === CANADA_BETA_MARKETPLACE_ID;
+}
 
 export function getEbayUrls() {
   const env = process.env.EBAY_ENVIRONMENT ?? "sandbox";

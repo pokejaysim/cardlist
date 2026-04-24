@@ -18,11 +18,9 @@ import {
   RefreshCw,
   Truck,
 } from "lucide-react";
-import type {
-  EbayMarketplace,
-  EbayPublishSettingsResponse,
-} from "../../../shared/types";
+import type { EbayPublishSettingsResponse } from "../../../shared/types";
 import {
+  CANADA_BETA_MARKETPLACE_ID,
   EBAY_MARKETPLACE_CONFIG,
   SNAPCARD_FALLBACK_HANDLING_TIME_OPTIONS,
   SNAPCARD_FALLBACK_RETURN_DAYS_OPTIONS,
@@ -68,21 +66,20 @@ const EMPTY_FORM: SellerSettingsForm = {
 
 export function EbayPublishSetupCard({
   title = "eBay Publish Setup",
-  description = "Save your seller defaults once so SnapCard can publish without asking for shipping and return details every time.",
+  description = "Canada beta: save your eBay.ca seller defaults once so SnapCard can publish without asking for shipping and return details every time.",
   onStateChange,
 }: EbayPublishSetupCardProps) {
   const queryClient = useQueryClient();
-  const [selectedMarketplace, setSelectedMarketplace] =
-    useState<EbayMarketplace>("EBAY_CA");
   const [form, setForm] = useState<SellerSettingsForm>(EMPTY_FORM);
   const [saveError, setSaveError] = useState("");
   const [saving, setSaving] = useState(false);
+  const selectedMarketplace = CANADA_BETA_MARKETPLACE_ID;
 
   const settingsQuery = useQuery({
-    queryKey: ["ebay-publish-settings", selectedMarketplace],
+    queryKey: ["ebay-publish-settings", CANADA_BETA_MARKETPLACE_ID],
     queryFn: () =>
       apiFetch<EbayPublishSettingsResponse>(
-        `/account/ebay-publish-settings?marketplace_id=${selectedMarketplace}`,
+        `/account/ebay-publish-settings?marketplace_id=${CANADA_BETA_MARKETPLACE_ID}`,
       ),
   });
 
@@ -169,7 +166,7 @@ export function EbayPublishSetupCard({
             form.returns_accepted === "yes"
               ? form.return_shipping_cost_payer || null
               : null,
-          marketplace_id: selectedMarketplace,
+          marketplace_id: CANADA_BETA_MARKETPLACE_ID,
         }),
       });
 
@@ -277,25 +274,12 @@ export function EbayPublishSetupCard({
           </div>
         )}
 
-        <div className="space-y-2">
-          <Label htmlFor="ebay-marketplace">Marketplace</Label>
-          <select
-            id="ebay-marketplace"
-            className={SELECT_CLASS_NAME}
-            value={selectedMarketplace}
-            onChange={(event) =>
-              setSelectedMarketplace(event.target.value as EbayMarketplace)
-            }
-          >
-            {Object.entries(EBAY_MARKETPLACE_CONFIG).map(([id, config]) => (
-              <option key={id} value={id}>
-                {config.label} ({config.currency})
-              </option>
-            ))}
-          </select>
-          <p className="text-xs text-muted-foreground">
-            Seller policies and currency are per-marketplace. Currently showing{" "}
-            {currentConfig.label} ({currentConfig.currency}).
+        <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 text-sm">
+          <p className="font-medium">{currentConfig.label} beta</p>
+          <p className="mt-1 text-muted-foreground">
+            SnapCard is proving the Canada workflow first. New beta listings use{" "}
+            {currentConfig.currency}; US and international marketplace support
+            stays hidden until the Canada model is reliable.
           </p>
         </div>
 

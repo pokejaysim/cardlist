@@ -10,8 +10,9 @@ import {
   type EbayItemConditionMetadata,
 } from "./metadata.js";
 import {
-  getEbayMarketplaceId,
+  CANADA_BETA_MARKETPLACE_ID,
   getTradingCardCategoryId,
+  isCanadaBetaMarketplace,
 } from "./config.js";
 import {
   getEbayPublishSettingsState,
@@ -117,6 +118,8 @@ interface PhotoRow {
 }
 
 const MANUFACTURER_DEFAULT = "Nintendo";
+const CANADA_BETA_ONLY_MESSAGE =
+  "SnapCard beta publishing currently supports eBay Canada listings only. Create a new Canada listing to publish this card.";
 
 function formatDuration(
   listingType: "auction" | "fixed_price",
@@ -569,7 +572,7 @@ async function prepareListingContext(
       .map((photo) => photo.ebay_url ?? photo.file_url)
       .filter((url): url is string => Boolean(url));
 
-  const marketplaceId = listing.marketplace_id ?? getEbayMarketplaceId();
+  const marketplaceId = listing.marketplace_id ?? CANADA_BETA_MARKETPLACE_ID;
   const settingsState = await getEbayPublishSettingsState(userId, marketplaceId);
   const categoryId = getTradingCardCategoryId();
 
@@ -594,10 +597,40 @@ async function prepareListingContext(
   };
 }
 
+function buildUnsupportedMarketplaceReadiness(
+  listing: ListingRow,
+): PublishReadinessResult {
+  return {
+    ready: false,
+    missing: [
+      {
+        code: "unsupported_marketplace",
+        message: CANADA_BETA_ONLY_MESSAGE,
+        scope: "listing",
+      },
+    ],
+    warnings: [
+      `This draft is set to ${listing.marketplace_id ?? "an unknown marketplace"}; the beta is locked to ${CANADA_BETA_MARKETPLACE_ID}.`,
+    ],
+    resolved_item_specifics: {},
+    unresolved_required_aspects: [],
+    allowed_listing_types: ["auction", "fixed_price"],
+    allowed_auction_durations: [],
+    current_listing_type: listing.listing_type,
+    current_duration: listing.duration,
+    display_duration: formatDuration(listing.listing_type, listing.duration),
+  };
+}
+
 export async function getPublishReadiness(
   listingId: string,
   userId: string,
 ): Promise<PublishReadinessResult> {
+  const betaListing = await loadListing(listingId, userId);
+  if (!isCanadaBetaMarketplace(betaListing.marketplace_id)) {
+    return buildUnsupportedMarketplaceReadiness(betaListing);
+  }
+
   const {
     listing,
     photoUrls,
@@ -745,6 +778,11 @@ export async function prepareListingForPublish(
   userId: string,
   photoUrlsOverride?: string[],
 ): Promise<PreparedPublishData> {
+  const betaListing = await loadListing(listingId, userId);
+  if (!isCanadaBetaMarketplace(betaListing.marketplace_id)) {
+    throw new Error(CANADA_BETA_ONLY_MESSAGE);
+  }
+
   const {
     listing,
     photoUrls,

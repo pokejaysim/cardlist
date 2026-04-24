@@ -40,12 +40,17 @@ interface DevListing {
   title: string | null;
   description: string | null;
   price_cad: number | null;
+  marketplace_id: string;
+  currency_code: string;
   listing_type: string;
   duration: number;
   ebay_aspects: Record<string, string | string[]> | null;
   created_at: string;
   published_at: string | null;
-  ebay_item_id: number | null;
+  scheduled_at: string | null;
+  publish_started_at: string | null;
+  publish_attempted_at: string | null;
+  ebay_item_id: number | string | null;
   ebay_error: string | null;
   identified_by: string;
 }
@@ -68,6 +73,8 @@ export const DEV_LISTINGS: DevListing[] = [
     title: "Charizard 4/102 Base Set Holo Rare NM",
     description: "Charizard — Base Set 4/102 — Condition: NM",
     price_cad: 450.0,
+    marketplace_id: "EBAY_CA",
+    currency_code: "CAD",
     listing_type: "auction",
     duration: 7,
     ebay_aspects: {
@@ -76,6 +83,9 @@ export const DEV_LISTINGS: DevListing[] = [
     },
     created_at: new Date(Date.now() - 7 * 86400000).toISOString(),
     published_at: new Date(Date.now() - 6 * 86400000).toISOString(),
+    scheduled_at: null,
+    publish_started_at: new Date(Date.now() - 6 * 86400000).toISOString(),
+    publish_attempted_at: new Date(Date.now() - 6 * 86400000).toISOString(),
     ebay_item_id: 1234567890,
     ebay_error: null,
     identified_by: "manual",
@@ -96,6 +106,8 @@ export const DEV_LISTINGS: DevListing[] = [
     title: "Blastoise 2/102 Base Set Holo Rare LP",
     description: "Blastoise — Base Set 2/102 — Condition: LP",
     price_cad: 85.0,
+    marketplace_id: "EBAY_CA",
+    currency_code: "CAD",
     listing_type: "fixed_price",
     duration: 30,
     ebay_aspects: {
@@ -103,6 +115,9 @@ export const DEV_LISTINGS: DevListing[] = [
     },
     created_at: new Date(Date.now() - 2 * 86400000).toISOString(),
     published_at: null,
+    scheduled_at: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+    publish_started_at: null,
+    publish_attempted_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
     ebay_item_id: null,
     ebay_error: null,
     identified_by: "manual",
@@ -123,11 +138,16 @@ export const DEV_LISTINGS: DevListing[] = [
     title: "Pikachu VMAX 044/185 Vivid Voltage NM",
     description: null,
     price_cad: null,
+    marketplace_id: "EBAY_CA",
+    currency_code: "CAD",
     listing_type: "auction",
     duration: 7,
     ebay_aspects: null,
     created_at: new Date(Date.now() - 86400000).toISOString(),
     published_at: null,
+    scheduled_at: null,
+    publish_started_at: null,
+    publish_attempted_at: null,
     ebay_item_id: null,
     ebay_error: null,
     identified_by: "manual",
@@ -148,6 +168,8 @@ export const DEV_LISTINGS: DevListing[] = [
     title: "Mewtwo EX 150/165 Pokemon 151 Ultra Rare NM",
     description: "Mewtwo EX — Pokemon 151 150/165 — Condition: NM",
     price_cad: 25.0,
+    marketplace_id: "EBAY_CA",
+    currency_code: "CAD",
     listing_type: "fixed_price",
     duration: 30,
     ebay_aspects: {
@@ -155,6 +177,9 @@ export const DEV_LISTINGS: DevListing[] = [
     },
     created_at: new Date().toISOString(),
     published_at: null,
+    scheduled_at: null,
+    publish_started_at: null,
+    publish_attempted_at: new Date().toISOString(),
     ebay_item_id: null,
     ebay_error: "eBay API: Invalid shipping configuration. Please check your shipping settings.",
     identified_by: "manual",
@@ -175,6 +200,8 @@ export const DEV_LISTINGS: DevListing[] = [
     title: "Charizard 4/102 Base Set PSA 10 Holo Rare",
     description: "Charizard — Base Set 4/102 — PSA 10 (Gem Mint)",
     price_cad: 15000.0,
+    marketplace_id: "EBAY_CA",
+    currency_code: "CAD",
     listing_type: "fixed_price",
     duration: 30,
     ebay_aspects: {
@@ -183,6 +210,9 @@ export const DEV_LISTINGS: DevListing[] = [
     },
     created_at: new Date(Date.now() - 3 * 86400000).toISOString(),
     published_at: null,
+    scheduled_at: null,
+    publish_started_at: null,
+    publish_attempted_at: null,
     ebay_item_id: null,
     ebay_error: null,
     identified_by: "manual",
@@ -203,6 +233,8 @@ export const DEV_LISTINGS: DevListing[] = [
     title: "Pikachu 58/102 Base Set BGS 9.5 Common",
     description: "Pikachu — Base Set 58/102 — BGS 9.5 (Gem Mint)",
     price_cad: 350.0,
+    marketplace_id: "EBAY_CA",
+    currency_code: "CAD",
     listing_type: "auction",
     duration: 7,
     ebay_aspects: {
@@ -211,6 +243,9 @@ export const DEV_LISTINGS: DevListing[] = [
     },
     created_at: new Date(Date.now() - 5 * 86400000).toISOString(),
     published_at: new Date(Date.now() - 4 * 86400000).toISOString(),
+    scheduled_at: null,
+    publish_started_at: new Date(Date.now() - 4 * 86400000).toISOString(),
+    publish_attempted_at: new Date(Date.now() - 4 * 86400000).toISOString(),
     ebay_item_id: 9876543210,
     ebay_error: null,
     identified_by: "manual",

@@ -48,6 +48,17 @@ export async function processPublishJob(jobData: {
 
     const listingRow = listing as unknown as ListingRow;
 
+    const startedAt = new Date().toISOString();
+    await supabase
+      .from("listings")
+      .update({
+        status: "publishing",
+        publish_started_at: startedAt,
+        publish_attempted_at: startedAt,
+        ebay_error: null,
+      })
+      .eq("id", listingId);
+
     const token = await getValidEbayToken(listingRow.user_id);
 
     // 2. Fetch photos for this listing
@@ -108,6 +119,8 @@ export async function processPublishJob(jobData: {
         ebay_item_id: itemId,
         status: "published",
         published_at: new Date().toISOString(),
+        scheduled_at: null,
+        ebay_error: null,
         photo_urls: ebayPhotoUrls,
       })
       .eq("id", listingId);
@@ -127,6 +140,7 @@ export async function processPublishJob(jobData: {
       .update({
         status: "error",
         ebay_error: message,
+        publish_attempted_at: new Date().toISOString(),
       })
       .eq("id", listingId);
 

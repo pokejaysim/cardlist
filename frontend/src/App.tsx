@@ -13,17 +13,43 @@ import ListingDetail from "@/pages/ListingDetail";
 import Onboarding from "@/pages/Onboarding";
 import EbayCallback from "@/pages/EbayCallback";
 import Account from "@/pages/Account";
+import { Loader2 } from "lucide-react";
+import { supabaseConfigError } from "@/lib/supabase";
 
 const queryClient = new QueryClient();
 
 function LandingOrRedirect() {
   const { isAuthenticated, loading } = useAuth();
-  if (loading) return null;
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" />
+          Loading SnapCard...
+        </div>
+      </div>
+    );
+  }
   if (isAuthenticated) return <Navigate to="/dashboard" replace />;
   return <Landing />;
 }
 
+function ConfigErrorScreen() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+      <div className="max-w-lg rounded-xl border border-destructive/40 bg-destructive/10 p-6 text-sm text-destructive shadow-sm">
+        <p className="font-semibold">SnapCard could not start</p>
+        <p className="mt-2">{supabaseConfigError}</p>
+      </div>
+    </div>
+  );
+}
+
 function App() {
+  if (supabaseConfigError) {
+    return <ConfigErrorScreen />;
+  }
+
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>

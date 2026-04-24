@@ -98,13 +98,16 @@ export interface EbayPublishReadiness {
 
 // ── Listings ───────────────────────────────────────────
 
-export type ListingStatus = "draft" | "scheduled" | "published" | "error";
+export type ListingStatus = "draft" | "publishing" | "scheduled" | "published" | "error";
 export type ListingType = "auction" | "fixed_price";
 export type CardCondition = "NM" | "LP" | "MP" | "HP" | "DMG";
 export type CardGame = "pokemon";
 export type CardType = "raw" | "graded";
 export type GradingCompany = "PSA" | "BGS" | "CGC" | "SGC" | "other";
 export type EbayMarketplace = "EBAY_CA" | "EBAY_US";
+
+export const CANADA_BETA_MARKETPLACE_ID = "EBAY_CA" as const;
+export const CANADA_BETA_CURRENCY_CODE = "CAD" as const;
 
 export const EBAY_MARKETPLACE_CONFIG: Record<EbayMarketplace, { siteId: string; country: string; currency: string; label: string }> = {
   EBAY_CA: { siteId: "2", country: "CA", currency: "CAD", label: "eBay Canada" },
@@ -165,6 +168,9 @@ export interface Listing {
   // Metadata
   created_at: string;
   published_at: string | null;
+  scheduled_at: string | null;
+  publish_started_at: string | null;
+  publish_attempted_at: string | null;
   ebay_error: string | null;
   research_notes: string | null;
 }

@@ -4,11 +4,15 @@ import { requireAuth, type AuthenticatedRequest } from "../middleware/auth.js";
 import { supabase } from "../lib/supabase.js";
 import { generateTitle } from "../services/titleGenerator.js";
 import { generateDescription } from "../services/descriptionGenerator.js";
-import { schedulePublish } from "../services/ebay/publish.js";
+import { requestPublish, type PublishMode } from "../services/ebay/publish.js";
 import { getPublishReadiness } from "../services/ebay/readiness.js";
 import { uploadPhoto } from "../services/storage.js";
 import { PLAN_LIMITS, type PlanName } from "../lib/plans.js";
-import { isMockMode } from "../services/ebay/config.js";
+import {
+  CANADA_BETA_CURRENCY_CODE,
+  CANADA_BETA_MARKETPLACE_ID,
+  isMockMode,
+} from "../services/ebay/config.js";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -187,8 +191,8 @@ router.post("/listings", requireAuth, async (req, res) => {
         body.duration,
       ),
       price_cad: body.price_cad ?? null,
-      marketplace_id: body.marketplace_id ?? "EBAY_CA",
-      currency_code: body.currency_code ?? (body.marketplace_id === "EBAY_US" ? "USD" : "CAD"),
+      marketplace_id: CANADA_BETA_MARKETPLACE_ID,
+      currency_code: CANADA_BETA_CURRENCY_CODE,
       ebay_aspects: sanitizeEbayAspects(body.ebay_aspects),
       photo_urls: [],
     })
@@ -268,7 +272,7 @@ router.put("/listings/:id", requireAuth, async (req, res) => {
   const authReq = req as AuthenticatedRequest;
   const body = req.body as Record<string, unknown>;
 
-  // Only allow updating drafts
+  // Allow draft/error edits so users can recover failed eBay validations.
   const { data: existing } = await supabase
     .from("listings")
     .select("status, listing_type, duration")
@@ -281,8 +285,8 @@ router.put("/listings/:id", requireAuth, async (req, res) => {
     return;
   }
 
-  if (existing.status !== "draft") {
-    res.status(400).json({ error: "Can only edit draft listings", code: "INVALID_STATUS" });
+  if (existing.status !== "draft" && existing.status !== "error") {
+    res.status(400).json({ error: "Can only edit draft or error listings", code: "INVALID_STATUS" });
     return;
   }
 
@@ -301,6 +305,14 @@ router.put("/listings/:id", requireAuth, async (req, res) => {
       body.listing_type ?? existing.listing_type,
       body.duration ?? existing.duration,
     );
+  }
+
+  if ("marketplace_id" in updates) {
+    updates.marketplace_id = CANADA_BETA_MARKETPLACE_ID;
+  }
+
+  if ("currency_code" in updates) {
+    updates.currency_code = CANADA_BETA_CURRENCY_CODE;
   }
 
   if (hasCardChanges && typeof body.card_name === "string") {
@@ -508,6 +520,11 @@ router.get("/listings/:id/photos", requireAuth, async (req, res) => {
 router.post("/listings/:id/publish", requireAuth, async (req, res) => {
   const authReq = req as AuthenticatedRequest;
   const listingId = req.params.id as string;
+  const body = req.body as {
+    mode?: PublishMode;
+    scheduled_at?: string | null;
+  };
+  const mode: PublishMode = body.mode === "scheduled" ? "scheduled" : "now";
 
   // ── Mock mode ────────────────────────────────────────
   if (isMockMode()) {
@@ -544,7 +561,48 @@ router.post("/listings/:id/publish", requireAuth, async (req, res) => {
     // Simulate network delay
     await new Promise((resolve) => setTimeout(resolve, 500));
 
-    const mockItemId = `MOCK-${Date.now()}`;
+    if (mode === "scheduled") {
+      const scheduledAt = body.scheduled_at ? new Date(body.scheduled_at) : null;
+      if (!scheduledAt || Number.isNaN(scheduledAt.getTime())) {
+        res.status(400).json({ error: "Choose a valid publish date/time before scheduling.", code: "PUBLISH_ERROR" });
+        return;
+      }
+
+      if (scheduledAt.getTime() <= Date.now()) {
+        res.status(400).json({ error: "Scheduled publish time must be in the future.", code: "PUBLISH_ERROR" });
+        return;
+      }
+
+      const scheduledAtIso = scheduledAt.toISOString();
+      const { data: updated, error: updateErr } = await supabase
+        .from("listings")
+        .update({
+          status: "scheduled",
+          scheduled_at: scheduledAtIso,
+          publish_attempted_at: new Date().toISOString(),
+          publish_started_at: null,
+          ebay_error: null,
+        })
+        .eq("id", listingId)
+        .select()
+        .single();
+
+      if (updateErr) {
+        res.status(500).json({ error: "Failed to schedule listing", code: "DB_ERROR" });
+        return;
+      }
+
+      res.json({
+        message: "Listing scheduled for publish (mock)",
+        status: "scheduled",
+        scheduled_at: scheduledAtIso,
+        mock: true,
+        listing: updated,
+      });
+      return;
+    }
+
+    const mockItemId = Date.now();
 
     const { data: updated, error: updateErr } = await supabase
       .from("listings")
@@ -552,6 +610,10 @@ router.post("/listings/:id/publish", requireAuth, async (req, res) => {
         status: "published",
         ebay_item_id: mockItemId,
         published_at: new Date().toISOString(),
+        scheduled_at: null,
+        publish_attempted_at: new Date().toISOString(),
+        publish_started_at: new Date().toISOString(),
+        ebay_error: null,
       })
       .eq("id", listingId)
       .select()
@@ -567,9 +629,12 @@ router.post("/listings/:id/publish", requireAuth, async (req, res) => {
   }
 
   // ── Real eBay publish ─────────────────────────────────
-  const result = await schedulePublish(listingId, authReq.userId);
+  const result = await requestPublish(listingId, authReq.userId, {
+    mode,
+    scheduled_at: body.scheduled_at,
+  });
 
-  if (!result.scheduled) {
+  if (!result.ok) {
     let readiness = null;
     try {
       readiness = await getPublishReadiness(listingId, authReq.userId);
@@ -585,7 +650,19 @@ router.post("/listings/:id/publish", requireAuth, async (req, res) => {
     return;
   }
 
-  res.json({ message: "Listing scheduled for publish", status: "scheduled" });
+  if (result.status === "scheduled") {
+    res.json({
+      status: "scheduled",
+      scheduled_at: result.scheduled_at,
+    });
+    return;
+  }
+
+  res.json({
+    status: result.status ?? "publishing",
+    ebay_item_id: result.ebay_item_id,
+    error: result.error,
+  });
 });
 
 export default router;

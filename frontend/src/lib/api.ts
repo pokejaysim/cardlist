@@ -6,6 +6,10 @@ import {
   DEV_EBAY_PUBLISH_SETTINGS,
 } from "./devMode";
 import { useAuthStore } from "@/store/auth";
+import {
+  CANADA_BETA_CURRENCY_CODE,
+  CANADA_BETA_MARKETPLACE_ID,
+} from "../../../shared/types";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:3001/api";
 
@@ -51,11 +55,16 @@ function devMockResponse<T>(path: string, options?: RequestInit): T | null {
       title: parts.join(" ").slice(0, 80),
       description: null,
       price_cad: body.price_cad ?? null,
+      marketplace_id: CANADA_BETA_MARKETPLACE_ID,
+      currency_code: CANADA_BETA_CURRENCY_CODE,
       listing_type: body.listing_type ?? "auction",
       duration: body.listing_type === "fixed_price" ? 30 : 7,
       ebay_aspects: body.ebay_aspects ?? null,
       created_at: new Date().toISOString(),
       published_at: null,
+      scheduled_at: null,
+      publish_started_at: null,
+      publish_attempted_at: null,
       ebay_item_id: null,
       ebay_error: null,
       identified_by: body.identified_by ?? "manual",
@@ -96,11 +105,32 @@ function devMockResponse<T>(path: string, options?: RequestInit): T | null {
   const publishMatch = path.match(/^\/listings\/([\w-]+)\/publish$/);
   if (publishMatch && method === "POST") {
     const listing = DEV_LISTINGS.find((l) => l.id === publishMatch[1]);
+    const body = JSON.parse((options?.body as string) ?? "{}") as {
+      mode?: "now" | "scheduled";
+      scheduled_at?: string | null;
+    };
     if (listing) {
-      listing.status = "scheduled";
-      listing.ebay_item_id = null;
+      if (body.mode === "scheduled") {
+        listing.status = "scheduled";
+        listing.scheduled_at = body.scheduled_at ?? new Date(Date.now() + 60 * 60 * 1000).toISOString();
+        listing.publish_attempted_at = new Date().toISOString();
+        listing.publish_started_at = null;
+        listing.ebay_item_id = null;
+        return {
+          mock: true,
+          status: "scheduled",
+          scheduled_at: listing.scheduled_at,
+        } as unknown as T;
+      }
+
+      listing.status = "published";
+      listing.ebay_item_id = `MOCK-${Date.now()}`;
+      listing.published_at = new Date().toISOString();
+      listing.scheduled_at = null;
+      listing.publish_attempted_at = listing.published_at;
+      listing.publish_started_at = listing.published_at;
     }
-    return { mock: true, status: "scheduled" } as unknown as T;
+    return { mock: true, status: "published" } as unknown as T;
   }
 
   // GET /listings/:id/photos
@@ -277,6 +307,15 @@ function devMockResponse<T>(path: string, options?: RequestInit): T | null {
       message: string;
       scope: "seller" | "listing";
     }> = [];
+
+    if (listing.marketplace_id !== CANADA_BETA_MARKETPLACE_ID) {
+      missing.push({
+        code: "unsupported_marketplace",
+        message:
+          "SnapCard beta publishing currently supports eBay Canada listings only. Create a new Canada listing to publish this card.",
+        scope: "listing",
+      });
+    }
 
     for (const message of DEV_EBAY_PUBLISH_SETTINGS.readiness.missing) {
       missing.push({

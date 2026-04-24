@@ -21,8 +21,12 @@ import {
   PenLine,
   Search,
 } from "lucide-react";
-import type { PokemonTcgCardDetail, EbayMarketplace } from "../../../shared/types";
-import { EBAY_MARKETPLACE_CONFIG } from "../../../shared/types";
+import type { PokemonTcgCardDetail } from "../../../shared/types";
+import {
+  CANADA_BETA_CURRENCY_CODE,
+  CANADA_BETA_MARKETPLACE_ID,
+  EBAY_MARKETPLACE_CONFIG,
+} from "../../../shared/types";
 import type { UsageInfo } from "../../../shared/types";
 
 type Step = "photos" | "search" | "identify" | "details" | "pricing" | "preview";
@@ -56,6 +60,7 @@ const STEPS: { key: Step; label: string }[] = [
   { key: "pricing", label: "Pricing" },
   { key: "preview", label: "Preview" },
 ];
+const CANADA_BETA_CONFIG = EBAY_MARKETPLACE_CONFIG[CANADA_BETA_MARKETPLACE_ID];
 
 export default function CreateListing() {
   const navigate = useNavigate();
@@ -93,7 +98,6 @@ export default function CreateListing() {
     "auction"
   );
   const [price, setPrice] = useState("");
-  const [marketplace, setMarketplace] = useState<EbayMarketplace>("EBAY_CA");
 
   const currentStepIndex = STEPS.findIndex((s) => s.key === step);
 
@@ -270,8 +274,8 @@ export default function CreateListing() {
           identified_by: identifiedBy,
           listing_type: listingType,
           price_cad: price ? parseFloat(price) : undefined,
-          marketplace_id: marketplace,
-          currency_code: EBAY_MARKETPLACE_CONFIG[marketplace].currency,
+          marketplace_id: CANADA_BETA_MARKETPLACE_ID,
+          currency_code: CANADA_BETA_CURRENCY_CODE,
         }),
       });
 
@@ -717,21 +721,13 @@ export default function CreateListing() {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label>Marketplace</Label>
-              <select
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                value={marketplace}
-                onChange={(e) => setMarketplace(e.target.value as EbayMarketplace)}
-              >
-                {Object.entries(EBAY_MARKETPLACE_CONFIG).map(([id, config]) => (
-                  <option key={id} value={id}>
-                    {config.label} ({config.currency})
-                  </option>
-                ))}
-              </select>
-              <p className="text-xs text-muted-foreground">
-                Currency: {EBAY_MARKETPLACE_CONFIG[marketplace].currency}
+            <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm">
+              <p className="font-medium">
+                {CANADA_BETA_CONFIG.label} beta ({CANADA_BETA_CONFIG.currency})
+              </p>
+              <p className="mt-1 text-muted-foreground">
+                New beta listings publish to eBay.ca in CAD. US/international
+                support will unlock after the Canada workflow is proven.
               </p>
             </div>
 
@@ -804,7 +800,7 @@ export default function CreateListing() {
                   </p>
                 </div>
                 <div className="rounded-md bg-muted p-2.5">
-                  <p className="text-xs text-muted-foreground">Price ({EBAY_MARKETPLACE_CONFIG[marketplace].currency})</p>
+                  <p className="text-xs text-muted-foreground">Price ({CANADA_BETA_CURRENCY_CODE})</p>
                   <p className="text-sm font-medium">
                     {price ? `$${price}` : "Not set"}
                   </p>

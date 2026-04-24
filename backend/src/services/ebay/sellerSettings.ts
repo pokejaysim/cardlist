@@ -1,7 +1,7 @@
 import { supabase } from "../../lib/supabase.js";
 import {
+  CANADA_BETA_MARKETPLACE_ID,
   getEbayMarketplaceConfig,
-  getEbayMarketplaceId,
   getEbayUrls,
 } from "./config.js";
 import { getValidEbayToken } from "./tokenManager.js";
@@ -117,6 +117,12 @@ const EMPTY_POLICIES: EbayBusinessPolicyBundle = {
   return: [],
 };
 
+const CANADA_FALLBACK_SHIPPING_SERVICES = new Set([
+  "CA_PostLettermail",
+  "CA_PostRegularParcel",
+  "CA_PostExpeditedParcel",
+]);
+
 const BUSINESS_POLICY_UNAVAILABLE_MESSAGES = [
   "not opted into business policies",
   "not eligible for business policy",
@@ -132,7 +138,7 @@ function normalizePolicyId(
 }
 
 function normalizeMarketplaceId(marketplaceId?: string | null): string {
-  return marketplaceId ?? getEbayMarketplaceId();
+  return marketplaceId ?? CANADA_BETA_MARKETPLACE_ID;
 }
 
 function normalizeOptionalString(value: string | null | undefined): string | null {
@@ -369,11 +375,26 @@ function hasManualShippingDefaults(
 ): boolean {
   return Boolean(
     settings?.shipping_service &&
+      isSupportedFallbackShippingService(settings) &&
       settings.shipping_cost != null &&
       settings.shipping_cost >= 0 &&
       settings.handling_time_days != null &&
       settings.handling_time_days > 0,
   );
+}
+
+function isSupportedFallbackShippingService(
+  settings: EbaySellerSettings | null,
+): boolean {
+  if (!settings?.shipping_service) {
+    return false;
+  }
+
+  if (settings.marketplace_id !== CANADA_BETA_MARKETPLACE_ID) {
+    return false;
+  }
+
+  return CANADA_FALLBACK_SHIPPING_SERVICES.has(settings.shipping_service);
 }
 
 function hasManualReturnDefaults(settings: EbaySellerSettings | null): boolean {
@@ -431,6 +452,10 @@ function buildMissingMessages(
 
   if (!settings?.shipping_service) {
     missing.push("Choose a default shipping service for SnapCard fallback.");
+  } else if (!isSupportedFallbackShippingService(settings)) {
+    missing.push(
+      "Choose a supported eBay Canada shipping service for SnapCard fallback.",
+    );
   }
 
   if (settings?.shipping_cost == null || settings.shipping_cost < 0) {
@@ -696,6 +721,17 @@ export async function saveEbayPublishSettings(
     input.returns_accepted === null || input.returns_accepted === undefined
       ? null
       : Boolean(input.returns_accepted);
+  const shippingService = normalizeOptionalString(input.shipping_service);
+
+  if (
+    shippingService &&
+    marketplaceId === CANADA_BETA_MARKETPLACE_ID &&
+    !CANADA_FALLBACK_SHIPPING_SERVICES.has(shippingService)
+  ) {
+    throw new Error(
+      "Choose a supported eBay Canada shipping service for SnapCard fallback.",
+    );
+  }
 
   const payload: Partial<SellerSettingsRow> = {
     marketplace_id: marketplaceId,
@@ -707,7 +743,7 @@ export async function saveEbayPublishSettings(
     payment_policy_name: findPolicyName(policies.payment, paymentPolicyId),
     return_policy_id: returnPolicyId,
     return_policy_name: findPolicyName(policies.return, returnPolicyId),
-    shipping_service: normalizeOptionalString(input.shipping_service),
+    shipping_service: shippingService,
     shipping_cost: normalizeOptionalNumber(input.shipping_cost),
     handling_time_days: normalizeOptionalPositiveInteger(input.handling_time_days),
     returns_accepted: returnsAccepted,

@@ -20,6 +20,7 @@ import {
   Upload,
   Link,
   Settings2,
+  CalendarClock,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { EbayPublishReadiness } from "../../../shared/types";
@@ -43,10 +44,13 @@ interface Listing {
   currency_code: string;
   listing_type: string;
   duration: number;
-  ebay_item_id: number | null;
+  ebay_item_id: number | string | null;
   ebay_error: string | null;
   created_at: string;
   published_at: string | null;
+  scheduled_at: string | null;
+  publish_started_at: string | null;
+  publish_attempted_at: string | null;
   ebay_aspects: Record<string, string | string[]> | null;
 }
 
@@ -59,6 +63,7 @@ interface Photo {
 
 const statusColors: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   draft: "outline",
+  publishing: "secondary",
   scheduled: "secondary",
   published: "default",
   error: "destructive",
@@ -67,6 +72,33 @@ const statusColors: Record<string, "default" | "secondary" | "destructive" | "ou
 const CONDITIONS = ["NM", "LP", "MP", "HP", "DMG"] as const;
 const SELECT_CLASS_NAME =
   "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50";
+
+type PublishMode = "now" | "scheduled";
+
+interface PublishResponse {
+  mock?: boolean;
+  status: "publishing" | "published" | "scheduled" | "error";
+  scheduled_at?: string | null;
+  ebay_item_id?: string | null;
+  error?: string;
+}
+
+function defaultScheduledLocalValue(): string {
+  const scheduled = new Date(Date.now() + 60 * 60 * 1000);
+  scheduled.setSeconds(0, 0);
+  const local = new Date(
+    scheduled.getTime() - scheduled.getTimezoneOffset() * 60_000,
+  );
+  return local.toISOString().slice(0, 16);
+}
+
+function formatDateTime(value: string | null): string | null {
+  if (!value) return null;
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
+}
 
 export default function ListingDetail() {
   const { id } = useParams<{ id: string }>();
@@ -78,6 +110,11 @@ export default function ListingDetail() {
   const [saving, setSaving] = useState(false);
   const [savingAspects, setSavingAspects] = useState(false);
   const [error, setError] = useState("");
+  const [publishMode, setPublishMode] = useState<PublishMode>("now");
+  const [scheduledAtLocal, setScheduledAtLocal] = useState(
+    defaultScheduledLocalValue,
+  );
+  const [publishValidationError, setPublishValidationError] = useState("");
 
   const [uploading, setUploading] = useState(false);
   const [mockPublished, setMockPublished] = useState(false);
@@ -94,6 +131,19 @@ export default function ListingDetail() {
     queryFn: () => apiFetch<Listing>(`/listings/${id}`),
     enabled: !!id,
   });
+
+  useEffect(() => {
+    if (!id || listing?.status !== "publishing") {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      void queryClient.invalidateQueries({ queryKey: ["listing", id] });
+      void queryClient.invalidateQueries({ queryKey: ["listings"] });
+    }, 3000);
+
+    return () => window.clearInterval(intervalId);
+  }, [id, listing?.status, queryClient]);
 
   const { data: photos } = useQuery({
     queryKey: ["listing-photos", id],
@@ -182,18 +232,37 @@ export default function ListingDetail() {
   async function handlePublish() {
     if (!id) return;
     setError("");
+    setPublishValidationError("");
     setPublishing(true);
 
     try {
-      const result = await apiFetch<{ mock?: boolean }>(`/listings/${id}/publish`, { method: "POST" });
+      const payload =
+        publishMode === "scheduled"
+          ? {
+              mode: "scheduled" as const,
+              scheduled_at: scheduledAtLocal
+                ? new Date(scheduledAtLocal).toISOString()
+                : null,
+            }
+          : { mode: "now" as const };
+
+      const result = await apiFetch<PublishResponse>(`/listings/${id}/publish`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
       if (result.mock) {
         setMockPublished(true);
+      }
+      if (result.status === "error" && result.error) {
+        setPublishValidationError(result.error);
       }
       await queryClient.invalidateQueries({ queryKey: ["listing", id] });
       await queryClient.invalidateQueries({ queryKey: ["listings"] });
       await queryClient.invalidateQueries({ queryKey: ["publish-readiness", id] });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to publish");
+      setPublishValidationError(
+        err instanceof Error ? err.message : "Failed to publish",
+      );
     } finally {
       setPublishing(false);
     }
@@ -348,13 +417,17 @@ export default function ListingDetail() {
 
   const isDraft = listing.status === "draft";
   const isError = listing.status === "error";
+  const isPublishing = listing.status === "publishing";
   const isMockListing = mockPublished || (listing.ebay_item_id != null && String(listing.ebay_item_id).startsWith("MOCK-"));
   const sellerMissing = readiness?.missing.filter((item) => item.scope === "seller") ?? [];
   const listingMissing = readiness?.missing.filter((item) => item.scope === "listing") ?? [];
+  const canAttemptPublish = (isDraft || isError) && !editing;
   const publishBlocked =
     publishing ||
+    isPublishing ||
     !ebayStatus?.linked ||
     readinessLoading ||
+    (publishMode === "scheduled" && !scheduledAtLocal) ||
     ((isDraft || isError) && ebayStatus?.linked && readiness?.ready === false);
   const publishLabel = publishing
     ? "Validating..."
@@ -362,7 +435,11 @@ export default function ListingDetail() {
       ? "Checking readiness..."
       : readiness && !readiness.ready
         ? "Complete setup to publish"
-        : "Publish to eBay";
+        : publishMode === "scheduled"
+          ? "Schedule Listing"
+          : isError
+            ? "Retry Publish Now"
+            : "Publish Now";
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8">
@@ -432,6 +509,13 @@ export default function ListingDetail() {
                 {readinessError instanceof Error
                   ? readinessError.message
                   : "Failed to load eBay publish readiness."}
+              </div>
+            )}
+
+            {publishValidationError && (
+              <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
+                <p className="font-medium">eBay validation blocked publish</p>
+                <p className="mt-1">{publishValidationError}</p>
               </div>
             )}
 
@@ -639,7 +723,7 @@ export default function ListingDetail() {
                   />
                 </div>
               ))}
-              {isDraft && photos.length < 4 && (
+              {(isDraft || isError) && photos.length < 4 && (
                 <label className="flex cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-muted-foreground/25 transition hover:border-muted-foreground/50">
                   {uploading ? (
                     <Loader2 className="size-5 animate-spin text-muted-foreground" />
@@ -666,7 +750,7 @@ export default function ListingDetail() {
       {photos && photos.length === 0 && (
         <Card className="mb-4">
           <CardContent className="py-6">
-            {isDraft ? (
+            {isDraft || isError ? (
               <label className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed border-muted-foreground/25 p-6 transition hover:border-muted-foreground/50">
                 {uploading ? (
                   <Loader2 className="size-8 animate-spin text-muted-foreground" />
@@ -704,7 +788,7 @@ export default function ListingDetail() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="text-base">Card Details</CardTitle>
-            {isDraft && !editing && (
+            {(isDraft || isError) && !editing && (
               <Button variant="ghost" size="sm" onClick={startEditing}>
                 <Pencil className="mr-1.5 size-3.5" />
                 Edit
@@ -923,68 +1007,115 @@ export default function ListingDetail() {
       )}
 
       {/* Actions */}
-      <div className="flex gap-2">
-        {isDraft && !editing && (
-          <>
-            <Button
-              onClick={handlePublish}
-              disabled={publishBlocked}
-              className="flex-1"
-            >
-              {publishing || readinessLoading ? (
-                <Loader2 className="mr-1.5 size-4 animate-spin" />
-              ) : (
-                <Send className="mr-1.5 size-4" />
-              )}
-              {publishLabel}
-            </Button>
-            <Button
-              variant="destructive"
-              size="icon"
-              onClick={handleDelete}
-              disabled={deleting}
-            >
-              {deleting ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Trash2 className="size-4" />
-              )}
-            </Button>
-          </>
-        )}
-        {listing.status === "scheduled" && (
-          <div className="rounded-lg border bg-muted/50 p-4 text-sm">
-            <div className="flex items-center gap-2 font-medium">
-              <Loader2 className="size-4 animate-spin text-primary" />
-              Scheduled for publishing
+      {canAttemptPublish && (
+        <Card className="border-primary/20">
+          <CardHeader>
+            <CardTitle className="text-base">Publish to eBay.ca</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setPublishMode("now")}
+                className={`rounded-md border px-3 py-2 text-sm font-medium transition ${
+                  publishMode === "now"
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-input hover:bg-accent"
+                }`}
+              >
+                Publish now
+              </button>
+              <button
+                type="button"
+                onClick={() => setPublishMode("scheduled")}
+                className={`rounded-md border px-3 py-2 text-sm font-medium transition ${
+                  publishMode === "scheduled"
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-input hover:bg-accent"
+                }`}
+              >
+                Schedule for later
+              </button>
             </div>
-            <p className="mt-1 text-muted-foreground">
-              Your listing will appear on eBay within 5 hours. This buffer gives you time to cancel or edit before it goes live.
-            </p>
-          </div>
-        )}
-        {isError && (
-          <>
-            <Button
-              onClick={handlePublish}
-              disabled={publishBlocked}
-              variant="outline"
-              className="flex-1"
-            >
-              {publishing || readinessLoading ? (
-                <Loader2 className="mr-1.5 size-4 animate-spin" />
-              ) : (
-                <Send className="mr-1.5 size-4" />
+
+            {publishMode === "scheduled" && (
+              <div className="space-y-2">
+                <Label htmlFor="scheduled-at">Publish date/time</Label>
+                <Input
+                  id="scheduled-at"
+                  type="datetime-local"
+                  value={scheduledAtLocal}
+                  onChange={(event) => setScheduledAtLocal(event.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  SnapCard will verify the listing now, then queue it for this
+                  local time.
+                </p>
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <Button
+                onClick={handlePublish}
+                disabled={publishBlocked}
+                className="flex-1"
+              >
+                {publishing || readinessLoading ? (
+                  <Loader2 className="mr-1.5 size-4 animate-spin" />
+                ) : publishMode === "scheduled" ? (
+                  <CalendarClock className="mr-1.5 size-4" />
+                ) : (
+                  <Send className="mr-1.5 size-4" />
+                )}
+                {publishLabel}
+              </Button>
+              {isError && (
+                <Button variant="outline" onClick={startEditing}>
+                  <Pencil className="mr-1.5 size-4" />
+                  Edit & Fix
+                </Button>
               )}
-              {publishLabel === "Publish to eBay" ? "Retry Publish" : publishLabel}
-            </Button>
-            <Button variant="outline" onClick={startEditing}>
-              <Pencil className="mr-1.5 size-4" />
-              Edit & Fix
-            </Button>
-          </>
-        )}
-      </div>
+              <Button
+                variant="destructive"
+                size="icon"
+                onClick={handleDelete}
+                disabled={deleting}
+              >
+                {deleting ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Trash2 className="size-4" />
+                )}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {isPublishing && (
+        <div className="rounded-lg border bg-muted/50 p-4 text-sm">
+          <div className="flex items-center gap-2 font-medium">
+            <Loader2 className="size-4 animate-spin text-primary" />
+            Publishing to eBay.ca
+          </div>
+          <p className="mt-1 text-muted-foreground">
+            SnapCard is creating the eBay listing now. This page will refresh
+            until it becomes published or shows an error.
+          </p>
+        </div>
+      )}
+
+      {listing.status === "scheduled" && (
+        <div className="rounded-lg border bg-muted/50 p-4 text-sm">
+          <div className="flex items-center gap-2 font-medium">
+            <CalendarClock className="size-4 text-primary" />
+            Scheduled for publishing
+          </div>
+          <p className="mt-1 text-muted-foreground">
+            Scheduled for {formatDateTime(listing.scheduled_at) ?? "the selected time"}.
+          </p>
+        </div>
+      )}
     </div>
   );
 }

@@ -5,6 +5,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { apiFetch } from "@/lib/api";
 import BatchPhotoGrid, { type BatchCard } from "@/components/BatchPhotoGrid";
 import { Upload, Loader2, CheckCircle2, AlertCircle, Wand2 } from "lucide-react";
+import {
+  CANADA_BETA_CURRENCY_CODE,
+  CANADA_BETA_MARKETPLACE_ID,
+} from "../../../shared/types";
 
 const MAX_BATCH_SIZE = 20;
 
@@ -65,6 +69,7 @@ export default function BatchUpload() {
       file_url: null,
       status: "uploading",
       result: null,
+      price_cad: "",
       error: null,
     }));
 
@@ -163,7 +168,12 @@ export default function BatchUpload() {
           const match = response.results.find((r) => r.image_url === card.file_url);
           if (!match) return card;
           if (match.status === "ok" && match.result) {
-            return { ...card, status: "identified", result: match.result };
+            return {
+              ...card,
+              status: "identified",
+              result: match.result,
+              price_cad: card.price_cad ?? "",
+            };
           }
           return {
             ...card,
@@ -194,6 +204,7 @@ export default function BatchUpload() {
     for (const card of identifiedCards) {
       if (!card.result) continue;
       try {
+        const parsedPrice = card.price_cad ? Number(card.price_cad) : undefined;
         // Create the listing
         const listing = await apiFetch<{ id: string }>("/listings", {
           method: "POST",
@@ -209,6 +220,12 @@ export default function BatchUpload() {
             identified_by: "ai",
             listing_type: "fixed_price",
             duration: 7,
+            price_cad:
+              parsedPrice != null && Number.isFinite(parsedPrice)
+                ? parsedPrice
+                : undefined,
+            marketplace_id: CANADA_BETA_MARKETPLACE_ID,
+            currency_code: CANADA_BETA_CURRENCY_CODE,
           }),
         });
 
@@ -389,7 +406,8 @@ export default function BatchUpload() {
               Ready to create {String(identifiedCount)} draft listing{identifiedCount === 1 ? "" : "s"}
             </p>
             <p className="text-sm text-muted-foreground">
-              You can add pricing and publish from each listing afterward.
+              These will be eBay.ca/CAD drafts with photos attached. Add prices
+              now to pass readiness faster, or finish pricing on each listing.
             </p>
           </div>
           <Button onClick={handleCreateListings} disabled={creating} size="lg">

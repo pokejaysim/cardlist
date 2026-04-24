@@ -14,7 +14,8 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
-import type { UsageInfo } from "../../../shared/types";
+import type { EbayPublishSettingsResponse, UsageInfo } from "../../../shared/types";
+import { CANADA_BETA_MARKETPLACE_ID } from "../../../shared/types";
 
 interface Listing {
   id: string;
@@ -27,16 +28,27 @@ interface Listing {
   status: string;
   title: string | null;
   price_cad: number | null;
+  currency_code: string | null;
   created_at: string;
+  scheduled_at: string | null;
   ebay_item_id: number | null;
 }
 
 const statusColors: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   draft: "outline",
+  publishing: "secondary",
   scheduled: "secondary",
   published: "default",
   error: "destructive",
 };
+
+function formatScheduledTime(value: string | null): string | null {
+  if (!value) return null;
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
+}
 
 export default function Dashboard() {
   const [showUpgrade, setShowUpgrade] = useState(false);
@@ -59,6 +71,15 @@ export default function Dashboard() {
     queryFn: () => apiFetch<{ linked: boolean }>("/account/ebay-status"),
   });
 
+  const { data: publishSettings } = useQuery({
+    queryKey: ["ebay-publish-settings", CANADA_BETA_MARKETPLACE_ID],
+    queryFn: () =>
+      apiFetch<EbayPublishSettingsResponse>(
+        `/account/ebay-publish-settings?marketplace_id=${CANADA_BETA_MARKETPLACE_ID}`,
+      ),
+    enabled: ebayStatus?.linked === true,
+  });
+
   async function linkEbay() {
     try {
       const { url } = await apiFetch<{ url: string }>("/auth/ebay-oauth-url");
@@ -69,9 +90,11 @@ export default function Dashboard() {
   }
 
   const drafts = listings?.filter((l) => l.status === "draft") ?? [];
+  const publishing = listings?.filter((l) => l.status === "publishing") ?? [];
   const scheduled = listings?.filter((l) => l.status === "scheduled") ?? [];
   const published = listings?.filter((l) => l.status === "published") ?? [];
   const errors = listings?.filter((l) => l.status === "error") ?? [];
+  const publishSetupReady = publishSettings?.readiness.ready === true;
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
@@ -113,7 +136,9 @@ export default function Dashboard() {
 
       {/* Setup banner for new users */}
       {!setupDismissed &&
-        (ebayStatus?.linked === false || listings?.length === 0) && (
+        (ebayStatus?.linked === false ||
+          (ebayStatus?.linked === true && !publishSetupReady) ||
+          listings?.length === 0) && (
           <Card className="mt-4">
             <CardContent className="py-4">
               <div className="flex items-start justify-between">
@@ -137,6 +162,25 @@ export default function Dashboard() {
                         >
                           Connect your eBay account
                         </button>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {publishSetupReady ? (
+                        <CheckCircle2 className="size-4 text-green-500" />
+                      ) : (
+                        <Circle className="size-4 text-muted-foreground" />
+                      )}
+                      {publishSetupReady ? (
+                        <span className="text-muted-foreground">
+                          eBay publish setup ready
+                        </span>
+                      ) : (
+                        <Link
+                          to="/account"
+                          className="text-primary hover:underline"
+                        >
+                          Finish eBay publish setup
+                        </Link>
                       )}
                     </div>
                     <div className="flex items-center gap-2">
@@ -175,9 +219,10 @@ export default function Dashboard() {
         )}
 
       {/* Stats row */}
-      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
         {[
           { label: "Drafts", count: drafts.length, dot: "bg-muted-foreground/40" },
+          { label: "Publishing", count: publishing.length, dot: "bg-sky-400" },
           { label: "Scheduled", count: scheduled.length, dot: "bg-amber-400" },
           { label: "Published", count: published.length, dot: "bg-primary" },
           { label: "Errors", count: errors.length, dot: "bg-destructive" },
@@ -246,12 +291,19 @@ export default function Dashboard() {
                   </p>
                   <div className="mt-2 flex items-center justify-between">
                     <p className="font-heading text-lg font-bold">
-                      {listing.price_cad ? `$${listing.price_cad}` : "—"}
+                      {listing.price_cad
+                        ? `$${listing.price_cad} ${listing.currency_code ?? "CAD"}`
+                        : "—"}
                     </p>
                     <Badge variant={statusColors[listing.status] ?? "outline"}>
                       {listing.status}
                     </Badge>
                   </div>
+                  {listing.status === "scheduled" && (
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Scheduled {formatScheduledTime(listing.scheduled_at) ?? "for later"}
+                    </p>
+                  )}
                 </CardContent>
               </Card>
             </Link>
