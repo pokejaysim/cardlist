@@ -27,10 +27,11 @@ describe("descriptionTemplateRenderer", () => {
       card_name: `Pikachu <img src=x onerror="alert(1)"> & Friends`,
     });
 
-    expect(html).toContain(
-      "Pikachu &lt;img src=x onerror=&quot;alert(1)&quot;&gt; &amp; Friends",
-    );
+    // The sanitizer strips the unsafe <img> tag entirely (safer than escaping)
     expect(html).not.toContain("<img");
+    expect(html).not.toContain("onerror");
+    expect(html).toContain("Pikachu");
+    expect(html).toContain("&amp; Friends");
   });
 
   it("preserves normal eBay-friendly HTML", () => {
