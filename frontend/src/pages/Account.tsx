@@ -12,7 +12,7 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, apiUpload } from "@/lib/api";
 import { EbayPublishSetupCard } from "@/components/EbayPublishSetupCard";
 import {
   DESCRIPTION_TEMPLATE_PLACEHOLDERS,
@@ -23,6 +23,7 @@ import {
   ExternalLink,
   CheckCircle2,
   Circle,
+  ImageIcon,
   Loader2,
   Crown,
   AlertTriangle,
@@ -205,9 +206,11 @@ function ListingPreferencesCard({
 }) {
   const [preferences, setPreferences] = useState(initialPreferences);
   const [saving, setSaving] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const htmlFileInputRef = useRef<HTMLInputElement>(null);
+  const logoFileInputRef = useRef<HTMLInputElement>(null);
   const templateLooksLikePlainText = looksLikeRenderedTemplateText(
     preferences.description_template_html,
   );
@@ -267,6 +270,40 @@ function ListingPreferencesCard({
     } catch {
       setError("Could not read that HTML file. Try opening it in a code editor and copying the raw HTML.");
     } finally {
+      event.target.value = "";
+    }
+  }
+
+  async function uploadLogoFile(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setError("");
+    setMessage("");
+    setUploadingLogo(true);
+
+    try {
+      if (!file.type.startsWith("image/")) {
+        setError("Please choose an image file for your logo.");
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append("logo", file);
+      const saved = await apiUpload<ListingPreference>(
+        "/account/listing-preferences/logo",
+        formData,
+      );
+      setPreferences(saved);
+      setMessage("Logo uploaded and saved.");
+    } catch (uploadError) {
+      setError(
+        uploadError instanceof Error
+          ? uploadError.message
+          : "Could not upload logo.",
+      );
+    } finally {
+      setUploadingLogo(false);
       event.target.value = "";
     }
   }
@@ -371,19 +408,53 @@ function ListingPreferencesCard({
 
         <div className="space-y-1.5">
           <Label>Seller logo URL</Label>
-          <Input
-            type="url"
-            value={preferences.seller_logo_url ?? ""}
-            onChange={(event) =>
-              setPreferences((current) => ({
-                ...current,
-                seller_logo_url: event.target.value,
-              }))
-            }
-            placeholder="https://example.com/pjs-logo.png"
-          />
+          <div className="flex gap-2">
+            <Input
+              type="url"
+              value={preferences.seller_logo_url ?? ""}
+              onChange={(event) =>
+                setPreferences((current) => ({
+                  ...current,
+                  seller_logo_url: event.target.value,
+                }))
+              }
+              placeholder="https://example.com/pjs-logo.png"
+            />
+            <input
+              ref={logoFileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={(event) => void uploadLogoFile(event)}
+              className="hidden"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => logoFileInputRef.current?.click()}
+              disabled={uploadingLogo}
+            >
+              {uploadingLogo ? (
+                <Loader2 className="mr-1.5 size-4 animate-spin" />
+              ) : (
+                <ImageIcon className="mr-1.5 size-4" />
+              )}
+              Upload logo
+            </Button>
+          </div>
+          {preferences.seller_logo_url && (
+            <div className="mt-2 flex items-center gap-3 rounded-lg border bg-muted/30 p-3">
+              <img
+                src={preferences.seller_logo_url}
+                alt="Seller logo preview"
+                className="max-h-16 max-w-48 rounded bg-white object-contain"
+              />
+              <span className="break-all text-xs text-muted-foreground">
+                {preferences.seller_logo_url}
+              </span>
+            </div>
+          )}
           <p className="text-xs text-muted-foreground">
-            Optional. Must be a public https:// image URL. Use it in your template with {"{{seller_logo_url}}"}.
+            Upload once or paste a public https:// image URL. Use it in your template with {"{{seller_logo_url}}"}.
           </p>
         </div>
 

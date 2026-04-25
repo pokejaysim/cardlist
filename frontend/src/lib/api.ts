@@ -674,6 +674,16 @@ export async function apiUpload<T>(
   formData: FormData,
 ): Promise<T> {
   if (DEV_MODE) {
+    if (path === "/account/listing-preferences/logo") {
+      DEV_LISTING_PREFERENCES = {
+        ...DEV_LISTING_PREFERENCES,
+        seller_logo_url:
+          "https://placehold.co/800x260/ffffff/1f4f9a?text=PJS+Collectibles",
+        updated_at: new Date().toISOString(),
+      };
+      return DEV_LISTING_PREFERENCES as unknown as T;
+    }
+
     if (path === "/photos/upload") {
       return {
         url: `https://placehold.co/400x560/1f2937/ffffff?text=Uploaded+${String(Date.now())}`,

@@ -1,4 +1,5 @@
 import { Router } from "express";
+import multer from "multer";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/auth.js";
 import { supabase } from "../lib/supabase.js";
 import { PLAN_LIMITS, type PlanName } from "../lib/plans.js";
@@ -10,8 +11,13 @@ import {
   getListingPreferences,
   saveListingPreferences,
 } from "../services/listingPreferences.js";
+import { uploadSellerLogo } from "../services/storage.js";
 
 const router = Router();
+const uploadLogo = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+});
 
 // ── Get user profile ───────────────────────────────────
 
@@ -170,6 +176,41 @@ router.put("/account/listing-preferences", requireAuth, async (req, res) => {
     });
   }
 });
+
+router.post(
+  "/account/listing-preferences/logo",
+  requireAuth,
+  uploadLogo.single("logo"),
+  async (req, res) => {
+    const authReq = req as AuthenticatedRequest;
+    const file = req.file;
+
+    if (!file) {
+      res.status(400).json({ error: "No logo uploaded" });
+      return;
+    }
+
+    if (!file.mimetype.startsWith("image/")) {
+      res.status(400).json({ error: "Logo must be an image file" });
+      return;
+    }
+
+    try {
+      const { url } = await uploadSellerLogo(file.buffer, authReq.userId);
+      const preferences = await saveListingPreferences(authReq.userId, {
+        seller_logo_url: url,
+      });
+      res.status(201).json(preferences);
+    } catch (error) {
+      console.error("Seller logo upload failed:", error);
+      res.status(500).json({
+        error:
+          error instanceof Error ? error.message : "Seller logo upload failed",
+        code: "LOGO_UPLOAD_ERROR",
+      });
+    }
+  },
+);
 
 // ── Check eBay account link status ─────────────────────
 
