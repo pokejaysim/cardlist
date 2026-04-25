@@ -7,17 +7,19 @@ import {
 describe("descriptionTemplateRenderer", () => {
   it("replaces supported placeholders and leaves unknown placeholders empty", () => {
     const html = renderDescriptionTemplate(
-      "<h1>{{ title }}</h1><p>{{card_name}} {{card_number}} {{missing}}</p>",
+      "<h1>{{ title }}</h1><img src=\"{{seller_logo_url}}\"><p>{{card_name}} {{card_number}} {{missing}}</p>",
       {
         title: "2025 Pokemon Prismatic Evolutions Fan Rotom #085/131 Holo Rare - NM",
         card_name: "Fan Rotom",
         card_number: "085/131",
+        seller_logo_url: "https://example.com/logo.png",
       },
     );
 
     expect(html).toContain(
       "<h1>2025 Pokemon Prismatic Evolutions Fan Rotom #085/131 Holo Rare - NM</h1>",
     );
+    expect(html).toContain('<img src="https://example.com/logo.png">');
     expect(html).toContain("<p>Fan Rotom 085/131 </p>");
     expect(html).not.toContain("{{missing}}");
   });

@@ -26,6 +26,7 @@ let DEV_LISTING_PREFERENCES: ListingPreference = {
   default_raw_condition: "NM",
   description_template: "Thanks for looking. Cards are packed carefully and shipped from Canada.",
   description_template_html: null,
+  seller_logo_url: null,
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),
 };
@@ -337,6 +338,8 @@ function devMockResponse<T>(path: string, options?: RequestInit): T | null {
         body.description_template ?? DEV_LISTING_PREFERENCES.description_template,
       description_template_html:
         body.description_template_html ?? DEV_LISTING_PREFERENCES.description_template_html,
+      seller_logo_url:
+        body.seller_logo_url ?? DEV_LISTING_PREFERENCES.seller_logo_url,
       updated_at: new Date().toISOString(),
     };
     return DEV_LISTING_PREFERENCES as unknown as T;

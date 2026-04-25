@@ -53,6 +53,7 @@ export async function buildListingDescription(
     return renderDescriptionTemplate(preferences.description_template_html, {
       ...input,
       ...sellerContext,
+      seller_logo_url: preferences.seller_logo_url,
     } satisfies DescriptionTemplateInput);
   }
 

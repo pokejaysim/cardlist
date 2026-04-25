@@ -854,6 +854,7 @@ function buildCreateDescriptionPreview(
       card.card_type === "graded" ? card.grading_company || null : null,
     grade: card.card_type === "graded" ? card.grade || null : null,
     price_cad: price ? Number(price) : null,
+    seller_logo_url: preferences?.seller_logo_url || null,
     seller_location: "Your saved eBay location",
     shipping_summary: "Ships from Canada using your saved SnapCard/eBay defaults.",
     returns_summary: "Uses your saved SnapCard/eBay return defaults.",

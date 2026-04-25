@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -225,6 +226,7 @@ function ListingPreferencesCard({
           default_raw_condition: preferences.default_raw_condition,
           description_template: preferences.description_template,
           description_template_html: preferences.description_template_html,
+          seller_logo_url: preferences.seller_logo_url,
         }),
       });
       setPreferences(saved);
@@ -335,6 +337,24 @@ function ListingPreferencesCard({
         </label>
 
         <div className="space-y-1.5">
+          <Label>Seller logo URL</Label>
+          <Input
+            type="url"
+            value={preferences.seller_logo_url ?? ""}
+            onChange={(event) =>
+              setPreferences((current) => ({
+                ...current,
+                seller_logo_url: event.target.value,
+              }))
+            }
+            placeholder="https://example.com/pjs-logo.png"
+          />
+          <p className="text-xs text-muted-foreground">
+            Optional. Must be a public https:// image URL. Use it in your template with {"{{seller_logo_url}}"}.
+          </p>
+        </div>
+
+        <div className="space-y-1.5">
           <Label>eBay HTML description template</Label>
           <Textarea
             value={preferences.description_template_html ?? ""}
@@ -373,6 +393,7 @@ function ListingPreferencesCard({
               dangerouslySetInnerHTML={{
                 __html: buildSampleDescriptionPreview(
                   preferences.description_template_html,
+                  preferences.seller_logo_url,
                 ),
               }}
             />
@@ -406,7 +427,10 @@ function ListingPreferencesCard({
   );
 }
 
-function buildSampleDescriptionPreview(templateHtml?: string | null): string {
+function buildSampleDescriptionPreview(
+  templateHtml?: string | null,
+  sellerLogoUrl?: string | null,
+): string {
   const sample = {
     title: "2025 Pokemon Prismatic Evolutions Fan Rotom #085/131 Holo Rare - NM",
     card_name: "Fan Rotom",
@@ -419,6 +443,7 @@ function buildSampleDescriptionPreview(templateHtml?: string | null): string {
     grading_company: null,
     grade: null,
     price_cad: 5,
+    seller_logo_url: sellerLogoUrl || "https://example.com/pjs-logo.png",
     seller_location: "Vancouver, BC V5K 0A1",
     shipping_summary:
       "Ships from Canada via Canada Post Lettermail within 2 business days. Shipping cost: $2.50 CAD.",

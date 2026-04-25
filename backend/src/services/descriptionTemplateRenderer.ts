@@ -13,6 +13,7 @@ export interface DescriptionTemplateInput {
   grade?: string | null;
   year?: string | number | null;
   price_cad?: number | string | null;
+  seller_logo_url?: string | null;
   seller_location?: string | null;
   shipping_summary?: string | null;
   returns_summary?: string | null;
@@ -151,6 +152,7 @@ function buildPlaceholderValues(
     grade,
     year: normalizeText(input.year) || inferYear(input),
     price_cad: priceCad,
+    seller_logo_url: normalizeText(input.seller_logo_url),
     seller_location: normalizeText(input.seller_location),
     shipping_summary: normalizeText(input.shipping_summary),
     returns_summary: normalizeText(input.returns_summary),

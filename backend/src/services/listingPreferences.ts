@@ -12,6 +12,7 @@ export interface ListingPreferences {
   default_raw_condition: RawCondition;
   description_template: string | null;
   description_template_html: string | null;
+  seller_logo_url: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -23,6 +24,7 @@ export interface ListingPreferencesInput {
   default_raw_condition?: unknown;
   description_template?: unknown;
   description_template_html?: unknown;
+  seller_logo_url?: unknown;
 }
 
 export function defaultListingPreferences(userId: string): ListingPreferences {
@@ -36,6 +38,7 @@ export function defaultListingPreferences(userId: string): ListingPreferences {
     description_template:
       "Thanks for looking. Cards are packed carefully and shipped from Canada.",
     description_template_html: null,
+    seller_logo_url: null,
     created_at: now,
     updated_at: now,
   };
@@ -82,6 +85,7 @@ export async function saveListingPreferences(
       default_raw_condition: updates.default_raw_condition,
       description_template: updates.description_template,
       description_template_html: updates.description_template_html,
+      seller_logo_url: updates.seller_logo_url,
       updated_at: updates.updated_at,
     })
     .select()
@@ -126,11 +130,25 @@ function normalizeListingPreferences(
       row.description_template_html.trim()
         ? sanitizeDescriptionHtml(row.description_template_html.trim()).trim() || null
         : null,
+    seller_logo_url: normalizeSellerLogoUrl(row.seller_logo_url),
     created_at:
       typeof row.created_at === "string" ? row.created_at : defaults.created_at,
     updated_at:
       typeof row.updated_at === "string" ? row.updated_at : defaults.updated_at,
   };
+}
+
+function normalizeSellerLogoUrl(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  try {
+    const url = new URL(trimmed);
+    return url.protocol === "https:" ? url.toString() : null;
+  } catch {
+    return null;
+  }
 }
 
 function normalizeRawCondition(

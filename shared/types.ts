@@ -186,6 +186,7 @@ export interface ListingPreference {
   default_raw_condition: CardCondition;
   description_template: string | null;
   description_template_html: string | null;
+  seller_logo_url: string | null;
   created_at: string;
   updated_at: string;
 }
