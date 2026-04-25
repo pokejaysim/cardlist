@@ -45,4 +45,18 @@ describe("generateTitle", () => {
 
     expect(title.length).toBeLessThanOrEqual(80);
   });
+
+  it("infers 2025 for Destined Rivals cards", () => {
+    expect(
+      generateTitle({
+        card_name: "Team Rocket's Meowth",
+        set_name: "Destined Rivals",
+        card_number: "149/182",
+        rarity: "Common",
+        condition: "NM",
+        language: "English",
+        card_type: "raw",
+      }),
+    ).toBe("2025 Pokemon Destined Rivals Team Rocket's Meowth #149/182 Common - NM");
+  });
 });

@@ -14,6 +14,7 @@ interface TitleInput {
 const MAX_TITLE_LENGTH = 80;
 
 const SET_YEAR_HINTS: Array<{ pattern: RegExp; year: string }> = [
+  { pattern: /destined rivals/i, year: "2025" },
   { pattern: /prismatic evolutions/i, year: "2025" },
   { pattern: /surging sparks/i, year: "2024" },
   { pattern: /stellar crown/i, year: "2024" },
