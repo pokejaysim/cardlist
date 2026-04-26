@@ -67,6 +67,7 @@ function devMockResponse<T>(path: string, options?: RequestInit): T | null {
       card_type: body.card_type ?? "raw",
       grading_company: body.grading_company ?? null,
       grade: body.grade ?? null,
+      cert_number: isGraded ? body.cert_number ?? null : null,
       status: "draft",
       title: parts.join(" ").slice(0, 80),
       description: null,
@@ -367,6 +368,7 @@ function devMockResponse<T>(path: string, options?: RequestInit): T | null {
         card_type: "raw" as const,
         grading_company: null,
         grade: null,
+        cert_number: null,
         status: "draft",
         title: index % 2 === 0 ? "Charizard 4/102 Base Set Holo Rare NM" : "Pikachu VMAX 044/185 Vivid Voltage NM",
         description: "Autopilot generated draft description.",
@@ -602,6 +604,7 @@ function devMockResponse<T>(path: string, options?: RequestInit): T | null {
       card_type: "raw",
       grading_company: null,
       grade: null,
+      cert_number: null,
       confidence: 0.95,
     } as unknown as T;
   }

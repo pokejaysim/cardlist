@@ -8,6 +8,7 @@ interface TitleInput {
   card_type?: "raw" | "graded" | null;
   grading_company?: string | null;
   grade?: string | null;
+  cert_number?: string | null;
   year?: string | number | null;
 }
 

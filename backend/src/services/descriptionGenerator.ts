@@ -8,6 +8,7 @@ export interface DescriptionInput {
   card_type?: "raw" | "graded" | null;
   grading_company?: string | null;
   grade?: string | null;
+  cert_number?: string | null;
 }
 
 export function getConditionDescription(condition: string | null): string {
@@ -35,6 +36,9 @@ export function generateDescription(input: DescriptionInput): string {
     gradingRows += tableRow("Grading Company", input.grading_company);
     if (input.grade) {
       gradingRows += tableRow("Grade", input.grade);
+    }
+    if (input.cert_number) {
+      gradingRows += tableRow("Certification #", input.cert_number);
     }
   } else if (input.condition) {
     gradingRows = tableRow("Condition", conditionText);

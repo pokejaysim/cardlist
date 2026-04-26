@@ -80,6 +80,7 @@ router.post("/listings", requireAuth, async (req, res) => {
     card_type?: string;
     grading_company?: string;
     grade?: string;
+    cert_number?: string;
     identified_by?: string;
     listing_type?: string;
     duration?: number;
@@ -153,6 +154,7 @@ router.post("/listings", requireAuth, async (req, res) => {
     card_type: isGraded ? "graded" : "raw",
     grading_company: body.grading_company ?? null,
     grade: body.grade ?? null,
+    cert_number: isGraded ? normalizeCertNumber(body.cert_number) : null,
   });
 
   const description = await buildListingDescription(authReq.userId, {
@@ -166,6 +168,7 @@ router.post("/listings", requireAuth, async (req, res) => {
     card_type: isGraded ? "graded" : "raw",
     grading_company: body.grading_company ?? null,
     grade: body.grade ?? null,
+    cert_number: isGraded ? normalizeCertNumber(body.cert_number) : null,
     price_cad: body.price_cad ?? null,
   });
 
@@ -186,6 +189,7 @@ router.post("/listings", requireAuth, async (req, res) => {
       card_type: isGraded ? "graded" : "raw",
       grading_company: body.grading_company ?? null,
       grade: body.grade ?? null,
+      cert_number: isGraded ? normalizeCertNumber(body.cert_number) : null,
       identified_by: body.identified_by ?? "manual",
       listing_type: body.listing_type ?? "auction",
       duration: normalizeListingDuration(
@@ -303,6 +307,7 @@ router.put("/listings/:id", requireAuth, async (req, res) => {
     "card_type",
     "grading_company",
     "grade",
+    "cert_number",
   ];
   const hasCardChanges = cardFields.some((f) => f in body);
   const hasDescriptionChanges =
@@ -348,6 +353,9 @@ router.put("/listings/:id", requireAuth, async (req, res) => {
           card_type: isMergedGraded ? "graded" : "raw",
           grading_company: (merged.grading_company as string | null) ?? null,
           grade: (merged.grade as string | null) ?? null,
+          cert_number: isMergedGraded
+            ? normalizeCertNumber(merged.cert_number)
+            : null,
         })
       : typeof merged.title === "string"
         ? merged.title
@@ -368,8 +376,19 @@ router.put("/listings/:id", requireAuth, async (req, res) => {
       card_type: isMergedGraded ? "graded" : "raw",
       grading_company: (merged.grading_company as string | null) ?? null,
       grade: (merged.grade as string | null) ?? null,
+      cert_number: isMergedGraded
+        ? normalizeCertNumber(merged.cert_number)
+        : null,
       price_cad: (merged.price_cad as number | string | null) ?? null,
     });
+  }
+
+  if (updates.card_type === "raw") {
+    updates.grading_company = null;
+    updates.grade = null;
+    updates.cert_number = null;
+  } else if ("cert_number" in updates) {
+    updates.cert_number = normalizeCertNumber(updates.cert_number);
   }
 
   const { data, error } = await supabase
@@ -442,6 +461,7 @@ router.post("/listings/:id/generate", requireAuth, async (req, res) => {
     card_type: listing.card_type === "graded" ? "graded" : "raw",
     grading_company: listing.grading_company as string | null,
     grade: listing.grade as string | null,
+    cert_number: listing.cert_number as string | null,
   });
 
   const description = await buildListingDescription(authReq.userId, {
@@ -455,6 +475,7 @@ router.post("/listings/:id/generate", requireAuth, async (req, res) => {
     card_type: listing.card_type === "graded" ? "graded" : "raw",
     grading_company: listing.grading_company as string | null,
     grade: listing.grade as string | null,
+    cert_number: listing.cert_number as string | null,
     price_cad: listing.price_cad as number | null,
   });
 
@@ -472,6 +493,15 @@ router.post("/listings/:id/generate", requireAuth, async (req, res) => {
 
   res.json(data);
 });
+
+function normalizeCertNumber(value: unknown): string | null {
+  if (typeof value !== "string" && typeof value !== "number") return null;
+  const normalized = String(value)
+    .replace(/\b(?:cert(?:ification)?|serial|no\.?|number|#)\b/gi, "")
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .trim();
+  return normalized || null;
+}
 
 // ── Upload photo for a listing ─────────────────────────
 

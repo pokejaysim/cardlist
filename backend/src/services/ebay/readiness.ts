@@ -106,6 +106,7 @@ interface ListingRow {
   card_type: "raw" | "graded" | null;
   grading_company: string | null;
   grade: string | null;
+  cert_number: string | null;
   marketplace_id: string | null;
   listing_type: "auction" | "fixed_price";
   duration: number;
@@ -197,6 +198,15 @@ function buildDerivedAspectCandidates(
   if (listing.card_number) candidates["card number"] = [listing.card_number];
   if (listing.rarity) candidates.rarity = [listing.rarity];
   if (listing.language) candidates.language = [listing.language];
+  if (listing.card_type === "graded" && listing.cert_number) {
+    candidates["certification number"] = [listing.cert_number];
+    candidates["cert number"] = [listing.cert_number];
+    candidates["certificate number"] = [listing.cert_number];
+    candidates["serial number"] = [listing.cert_number];
+    candidates["professional sports authenticator cert number"] = [
+      listing.cert_number,
+    ];
+  }
 
   return candidates;
 }

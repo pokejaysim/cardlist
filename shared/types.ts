@@ -150,6 +150,7 @@ export interface Listing {
   card_type: CardType;
   grading_company: GradingCompany | null;
   grade: string | null;
+  cert_number: string | null;
   identified_by: "manual" | "ai" | "pokemon_tcg";
 
   // Listing details
@@ -312,6 +313,7 @@ export interface CardIdentification {
   card_type: CardType;
   grading_company: GradingCompany | null;
   grade: string | null;
+  cert_number: string | null;
   confidence: number; // 0-1
 }
 

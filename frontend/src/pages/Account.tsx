@@ -585,6 +585,7 @@ function buildSampleDescriptionPreview(
     card_type: "raw",
     grading_company: null,
     grade: null,
+    cert_number: null,
     price_cad: 5,
     seller_logo_url: sellerLogoUrl || "https://example.com/pjs-logo.png",
     seller_location: "Vancouver, BC V5K 0A1",

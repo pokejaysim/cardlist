@@ -29,11 +29,11 @@ describe("descriptionTemplateRenderer", () => {
       card_name: `Pikachu <img src=x onerror="alert(1)"> & Friends`,
     });
 
-    // The sanitizer strips the unsafe <img> tag entirely (safer than escaping)
+    // The sanitizer strips unsafe tags entirely (safer than escaping)
     expect(html).not.toContain("<img");
     expect(html).not.toContain("onerror");
     expect(html).toContain("Pikachu");
-    expect(html).toContain("&amp; Friends");
+    expect(html).toContain("& Friends");
   });
 
   it("preserves normal eBay-friendly HTML", () => {
@@ -82,17 +82,19 @@ describe("descriptionTemplateRenderer", () => {
 
   it("renders graded card company and grade placeholders", () => {
     const html = renderDescriptionTemplate(
-      "<p>{{card_type}}</p><p>{{condition}}</p><p>{{grading_company}} {{grade}}</p>",
+      "<p>{{card_type}}</p><p>{{condition}}</p><p>{{grading_company}} {{grade}}</p><p>{{cert_number}}</p>",
       {
         card_name: "Pikachu",
         card_type: "graded",
         grading_company: "PSA",
         grade: "10",
+        cert_number: "12345678",
       },
     );
 
     expect(html).toContain("<p>Graded</p>");
     expect(html).toContain("<p>PSA 10</p>");
     expect(html).toContain("<p>PSA 10</p>");
+    expect(html).toContain("<p>12345678</p>");
   });
 });

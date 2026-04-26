@@ -62,6 +62,7 @@ interface ListingRow {
   card_type: "raw" | "graded";
   grading_company: string | null;
   grade: string | null;
+  cert_number: string | null;
   title: string | null;
   description: string | null;
   price_cad: number | null;
@@ -112,6 +113,12 @@ function normalizeGradingCompany(value: string | null): string | null {
   const upper = trimmed.toUpperCase();
   if (["PSA", "BGS", "CGC", "SGC"].includes(upper)) return upper;
   return "other";
+}
+
+function normalizeCertNumber(value: string | null): string | null {
+  if (!value) return null;
+  const normalized = value.replace(/[^a-zA-Z0-9]/g, "").trim();
+  return normalized || null;
 }
 
 function priceChartingCadForIdentification(
@@ -237,6 +244,7 @@ function buildAutopilotMetadata(
       card_type: identification.card_type,
       grading_company: identification.grading_company,
       grade: identification.grade,
+      cert_number: identification.cert_number,
     },
     pricing: {
       original_suggested_price_cad: pricing.original_suggested_price_cad,
@@ -426,6 +434,10 @@ async function processBatchItem(input: {
       identification.card_type === "graded" && identification.grade
         ? identification.grade.trim()
         : null;
+    identification.cert_number =
+      identification.card_type === "graded"
+        ? normalizeCertNumber(identification.cert_number)
+        : null;
     identification.condition =
       identification.card_type === "graded"
         ? ""
@@ -537,6 +549,7 @@ async function insertAutopilotListing(input: {
     card_type: input.identification.card_type,
     grading_company: input.identification.grading_company,
     grade: input.identification.grade,
+    cert_number: input.identification.cert_number,
   });
   const listingType = input.preferences.default_batch_fixed_price
     ? "fixed_price"
@@ -555,6 +568,7 @@ async function insertAutopilotListing(input: {
     card_type: input.identification.card_type,
     grading_company: input.identification.grading_company,
     grade: input.identification.grade,
+    cert_number: input.identification.cert_number,
     price_cad: input.pricing.suggested_price_cad,
   });
 
@@ -573,6 +587,7 @@ async function insertAutopilotListing(input: {
       card_type: input.identification.card_type,
       grading_company: input.identification.grading_company,
       grade: input.identification.grade,
+      cert_number: input.identification.cert_number,
       identified_by: "ai",
       title,
       description,
@@ -592,6 +607,7 @@ async function insertAutopilotListing(input: {
           card_type: input.identification.card_type,
           grading_company: input.identification.grading_company,
           grade: input.identification.grade,
+          cert_number: input.identification.cert_number,
         },
         pricing: {
           original_suggested_price_cad:

@@ -52,6 +52,7 @@ interface CardDetails {
   card_type: "raw" | "graded";
   grading_company: string;
   grade: string;
+  cert_number: string;
   confidence?: number;
 }
 
@@ -107,6 +108,7 @@ export default function CreateListing() {
     card_type: "raw",
     grading_company: "",
     grade: "",
+    cert_number: "",
   });
 
   const [generatedTitle, setGeneratedTitle] = useState("");
@@ -159,6 +161,7 @@ export default function CreateListing() {
         card_type: result.card_type ?? "raw",
         grading_company: result.grading_company ?? "",
         grade: result.grade ?? "",
+        cert_number: result.cert_number ?? "",
         confidence: result.confidence,
       });
       setIdentifiedBy("ai");
@@ -191,6 +194,7 @@ export default function CreateListing() {
       card_type: "raw",
       grading_company: "",
       grade: "",
+      cert_number: "",
     });
     setStep("details");
   }
@@ -284,6 +288,7 @@ export default function CreateListing() {
           card_type: card.card_type,
           grading_company: card.card_type === "graded" ? card.grading_company || undefined : undefined,
           grade: card.card_type === "graded" ? card.grade || undefined : undefined,
+          cert_number: card.card_type === "graded" ? card.cert_number || undefined : undefined,
           identified_by: identifiedBy,
           listing_type: listingType,
           price_cad: price ? parseFloat(price) : undefined,
@@ -440,6 +445,7 @@ export default function CreateListing() {
                   card_type: "raw",
                   grading_company: "",
                   grade: "",
+                  cert_number: "",
                 });
                 setIdentifiedBy("pokemon_tcg");
                 setReferenceImageUrl(detail.image_large);
@@ -532,6 +538,7 @@ export default function CreateListing() {
                       condition: prev.condition || "NM",
                       grading_company: "",
                       grade: "",
+                      cert_number: "",
                     }));
                   }}
                   className={`flex-1 rounded-md border px-3 py-2 text-sm font-medium transition ${
@@ -664,6 +671,19 @@ export default function CreateListing() {
                       onChange={(e) => updateCard("grade", e.target.value)}
                       placeholder="e.g. 10, 9.5"
                     />
+                  </div>
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label htmlFor="cert_number">Certification #</Label>
+                    <Input
+                      id="cert_number"
+                      value={card.cert_number}
+                      onChange={(e) => updateCard("cert_number", e.target.value)}
+                      placeholder="Optional, e.g. PSA cert number"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      SnapCard will try to read this from the slab label, but
+                      you can fix it manually if needed.
+                    </p>
                   </div>
                 </>
               )}
@@ -875,6 +895,7 @@ function buildCreateDescriptionPreview(
     grading_company:
       card.card_type === "graded" ? card.grading_company || null : null,
     grade: card.card_type === "graded" ? card.grade || null : null,
+    cert_number: card.card_type === "graded" ? card.cert_number || null : null,
     price_cad: price ? Number(price) : null,
     seller_logo_url: preferences?.seller_logo_url || null,
     seller_location: "Your saved eBay location",

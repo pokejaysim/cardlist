@@ -200,6 +200,7 @@ export default function BatchUpload() {
           card_type: listing.card_type,
           grading_company: listing.card_type === "graded" ? listing.grading_company : null,
           grade: listing.card_type === "graded" ? listing.grade : null,
+          cert_number: listing.card_type === "graded" ? listing.cert_number : null,
           title: listing.title,
           description: listing.description,
           price_cad: listing.price_cad,
@@ -612,6 +613,9 @@ function EditableListingFields({
             onUpdate(listing.id, {
               card_type: event.target.value === "graded" ? "graded" : "raw",
               condition: event.target.value === "graded" ? null : listing.condition ?? "NM",
+              grading_company: event.target.value === "graded" ? listing.grading_company : null,
+              grade: event.target.value === "graded" ? listing.grade : null,
+              cert_number: event.target.value === "graded" ? listing.cert_number : null,
             })
           }
           className="h-10 rounded-md border border-input bg-background px-3 text-sm"
@@ -642,6 +646,9 @@ function EditableListingFields({
           </Field>
           <Field label="Grade">
             <Input value={listing.grade ?? ""} onChange={(event) => onUpdate(listing.id, { grade: event.target.value || null })} />
+          </Field>
+          <Field label="Cert #">
+            <Input value={listing.cert_number ?? ""} onChange={(event) => onUpdate(listing.id, { cert_number: event.target.value || null })} />
           </Field>
         </>
       ) : (

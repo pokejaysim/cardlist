@@ -19,6 +19,7 @@ export interface CardIdentificationResult {
   card_type: "raw" | "graded";
   grading_company: string | null;
   grade: string | null;
+  cert_number: string | null;
   confidence: number;
 }
 
@@ -81,6 +82,11 @@ const IDENTIFY_CARD_TOOL: Anthropic.Tool = {
         description:
           "For graded cards, report the grade exactly as shown on the slab label (for example 10 or 9.5). For raw cards, return an empty string.",
       },
+      cert_number: {
+        type: "string",
+        description:
+          "For graded cards, report the certification or serial number printed on the slab label if visible. Keep only the number/letters shown, without spaces or labels like Cert #. For raw cards or unreadable labels, return an empty string.",
+      },
       confidence: {
         type: "number",
         description:
@@ -98,6 +104,7 @@ const IDENTIFY_CARD_TOOL: Anthropic.Tool = {
       "card_type",
       "grading_company",
       "grade",
+      "cert_number",
       "confidence",
     ],
   },
@@ -193,6 +200,7 @@ async function identifyFromPhash(
     card_type: "raw",
     grading_company: null,
     grade: null,
+    cert_number: null,
     // Confidence scales from 1.0 (perfect match, distance=0) down to ~0.85
     // at the threshold. Still high enough that the UI treats it as confident.
     confidence: Math.max(0.85, 1 - match.distance / 64),
@@ -251,7 +259,7 @@ export async function identifyCard(
 3. **Condition** — based on visible wear on edges, corners, and surface.
 4. **Set / expansion** — the hardest to identify from a photo. Look at the set symbol (small icon near the card number) and the copyright/era text at the bottom. If you cannot clearly identify the set, make your best guess but lower the overall confidence score accordingly — it is better to be uncertain than to confidently guess wrong.
 5. **Rarity, language** — from the card's rarity symbol and printed language.
-6. **Raw vs graded** — if the card is in a PSA/BGS/CGC/SGC style slab, report it as graded and include the grader and grade from the label.
+6. **Raw vs graded** — if the card is in a PSA/BGS/CGC/SGC style slab, report it as graded and include the grader, grade, and visible certification/cert number from the label.
 
 If you can read the card details clearly, report them exactly as printed. If anything is unclear, lower the confidence score.
 
@@ -280,6 +288,10 @@ This could be a Pokemon card, Yu-Gi-Oh card, Magic: The Gathering card, sports c
     result.card_type === "graded" && result.grade
       ? result.grade
       : null;
+  result.cert_number =
+    result.card_type === "graded" && result.cert_number
+      ? normalizeCertNumber(result.cert_number)
+      : null;
 
   // Cross-check Pokemon set name against the authoritative Pokemon TCG database.
   // Opus reads card names and numbers accurately but often misidentifies sets
@@ -305,4 +317,12 @@ This could be a Pokemon card, Yu-Gi-Oh card, Magic: The Gathering card, sports c
   }
 
   return result;
+}
+
+function normalizeCertNumber(value: string): string | null {
+  const normalized = value
+    .replace(/\b(?:cert(?:ification)?|serial|no\.?|number|#)\b/gi, "")
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .trim();
+  return normalized || null;
 }

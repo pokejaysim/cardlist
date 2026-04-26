@@ -36,6 +36,7 @@ interface DevListing {
   card_type: "raw" | "graded";
   grading_company: string | null;
   grade: string | null;
+  cert_number: string | null;
   status: string;
   title: string | null;
   description: string | null;
@@ -70,6 +71,7 @@ export const DEV_LISTINGS: DevListing[] = [
     card_type: "raw",
     grading_company: null,
     grade: null,
+    cert_number: null,
     status: "published",
     title: "Charizard 4/102 Base Set Holo Rare NM",
     description: "Charizard — Base Set 4/102 — Condition: NM",
@@ -104,6 +106,7 @@ export const DEV_LISTINGS: DevListing[] = [
     card_type: "raw",
     grading_company: null,
     grade: null,
+    cert_number: null,
     status: "scheduled",
     title: "Blastoise 2/102 Base Set Holo Rare LP",
     description: "Blastoise — Base Set 2/102 — Condition: LP",
@@ -137,6 +140,7 @@ export const DEV_LISTINGS: DevListing[] = [
     card_type: "raw",
     grading_company: null,
     grade: null,
+    cert_number: null,
     status: "draft",
     title: "Pikachu VMAX 044/185 Vivid Voltage NM",
     description: null,
@@ -168,6 +172,7 @@ export const DEV_LISTINGS: DevListing[] = [
     card_type: "raw",
     grading_company: null,
     grade: null,
+    cert_number: null,
     status: "error",
     title: "Mewtwo EX 150/165 Pokemon 151 Ultra Rare NM",
     description: "Mewtwo EX — Pokemon 151 150/165 — Condition: NM",
@@ -201,6 +206,7 @@ export const DEV_LISTINGS: DevListing[] = [
     card_type: "graded",
     grading_company: "PSA",
     grade: "10",
+    cert_number: "12345678",
     status: "draft",
     title: "Charizard 4/102 Base Set PSA 10 Holo Rare",
     description: "Charizard — Base Set 4/102 — PSA 10 (Gem Mint)",
@@ -235,6 +241,7 @@ export const DEV_LISTINGS: DevListing[] = [
     card_type: "graded",
     grading_company: "BGS",
     grade: "9.5",
+    cert_number: "98765432",
     status: "published",
     title: "Pikachu 58/102 Base Set BGS 9.5 Common",
     description: "Pikachu — Base Set 58/102 — BGS 9.5 (Gem Mint)",

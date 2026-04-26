@@ -11,6 +11,7 @@ export interface DescriptionTemplateInput {
   card_type?: "raw" | "graded" | string | null;
   grading_company?: string | null;
   grade?: string | null;
+  cert_number?: string | null;
   year?: string | number | null;
   price_cad?: number | string | null;
   seller_logo_url?: string | null;
@@ -133,6 +134,7 @@ function buildPlaceholderValues(
   const condition = normalizeText(input.condition);
   const gradingCompany = normalizeText(input.grading_company);
   const grade = normalizeText(input.grade);
+  const certNumber = normalizeText(input.cert_number);
   const priceCad = formatPriceCad(input.price_cad);
 
   return {
@@ -151,6 +153,7 @@ function buildPlaceholderValues(
     card_type: isGraded ? "Graded" : "Raw",
     grading_company: gradingCompany,
     grade,
+    cert_number: isGraded ? certNumber : "",
     year: normalizeText(input.year) || inferYear(input),
     price_cad: priceCad,
     seller_logo_url: normalizeText(input.seller_logo_url),

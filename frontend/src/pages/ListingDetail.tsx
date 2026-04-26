@@ -38,6 +38,7 @@ interface Listing {
   card_type: "raw" | "graded" | null;
   grading_company: string | null;
   grade: string | null;
+  cert_number: string | null;
   status: string;
   title: string | null;
   description: string | null;
@@ -192,6 +193,10 @@ export default function ListingDetail() {
       card_number: listing.card_number,
       rarity: listing.rarity,
       condition: listing.condition,
+      card_type: listing.card_type ?? "raw",
+      grading_company: listing.grading_company,
+      grade: listing.grade,
+      cert_number: listing.cert_number,
       language: listing.language,
       price_cad: listing.price_cad,
       title: listing.title,
@@ -939,24 +944,85 @@ export default function ListingDetail() {
                 />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">Condition</Label>
-                <div className="flex gap-1">
-                  {CONDITIONS.map((c) => (
-                    <button
-                      key={c}
-                      type="button"
-                      onClick={() => updateField("condition", c)}
-                      className={`flex-1 rounded-md border px-2 py-1.5 text-xs font-medium transition ${
-                        editFields.condition === c
-                          ? "border-primary bg-primary text-primary-foreground"
-                          : "border-input hover:bg-accent"
-                      }`}
-                    >
-                      {c}
-                    </button>
-                  ))}
-                </div>
+                <Label className="text-xs">Card Type</Label>
+                <select
+                  value={(editFields.card_type as string) ?? "raw"}
+                  onChange={(event) => {
+                    const cardType = event.target.value === "graded" ? "graded" : "raw";
+                    updateField("card_type", cardType);
+                    if (cardType === "raw") {
+                      updateField("condition", (editFields.condition as string) || "NM");
+                      updateField("grading_company", null);
+                      updateField("grade", null);
+                      updateField("cert_number", null);
+                    } else {
+                      updateField("condition", null);
+                    }
+                  }}
+                  className={SELECT_CLASS_NAME}
+                >
+                  <option value="raw">Raw</option>
+                  <option value="graded">Graded</option>
+                </select>
               </div>
+              {editFields.card_type === "graded" ? (
+                <>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Grader</Label>
+                    <select
+                      value={(editFields.grading_company as string) ?? ""}
+                      onChange={(event) =>
+                        updateField("grading_company", event.target.value || null)
+                      }
+                      className={SELECT_CLASS_NAME}
+                    >
+                      <option value="">Choose grader</option>
+                      {["PSA", "BGS", "CGC", "SGC", "other"].map((grader) => (
+                        <option key={grader} value={grader}>
+                          {grader}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Grade</Label>
+                    <Input
+                      value={(editFields.grade as string) ?? ""}
+                      onChange={(e) => updateField("grade", e.target.value || null)}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Cert #</Label>
+                    <Input
+                      value={(editFields.cert_number as string) ?? ""}
+                      onChange={(e) =>
+                        updateField("cert_number", e.target.value || null)
+                      }
+                      placeholder="Optional"
+                    />
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-1">
+                  <Label className="text-xs">Condition</Label>
+                  <div className="flex gap-1">
+                    {CONDITIONS.map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => updateField("condition", c)}
+                        className={`flex-1 rounded-md border px-2 py-1.5 text-xs font-medium transition ${
+                          editFields.condition === c
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-input hover:bg-accent"
+                        }`}
+                      >
+                        {c}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
@@ -970,6 +1036,7 @@ export default function ListingDetail() {
                   ? [
                       ["Grading", listing.grading_company],
                       ["Grade", listing.grade],
+                      ["Cert #", listing.cert_number],
                     ]
                   : [["Condition", listing.condition]]),
               ].map(
