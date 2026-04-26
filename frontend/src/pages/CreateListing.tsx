@@ -6,7 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { PhotoUploader, type PhotoFile } from "@/components/PhotoUploader";
+import {
+  EMPTY_LISTING_PHOTO_SLOTS,
+  ListingPhotoSlotsUploader,
+  listingPhotoSlotsToArray,
+  type ListingPhotoSlots,
+  type ListingPhotoSlotKey,
+} from "@/components/ListingPhotoSlots";
 import { PricingSuggestion } from "@/components/PricingSuggestion";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
 import { apiFetch, apiUpload } from "@/lib/api";
@@ -70,7 +76,9 @@ export default function CreateListing() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [step, setStep] = useState<Step>("photos");
-  const [photos, setPhotos] = useState<PhotoFile[]>([]);
+  const [photoSlots, setPhotoSlots] = useState<ListingPhotoSlots>({
+    ...EMPTY_LISTING_PHOTO_SLOTS,
+  });
   const [_identifying, setIdentifying] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -107,6 +115,7 @@ export default function CreateListing() {
   );
   const [price, setPrice] = useState("");
 
+  const photos = listingPhotoSlotsToArray(photoSlots);
   const currentStepIndex = STEPS.findIndex((s) => s.key === step);
   const descriptionPreviewHtml = buildCreateDescriptionPreview(
     generatedTitle,
@@ -122,8 +131,11 @@ export default function CreateListing() {
     setIdentifying(true);
 
     try {
-      const frontPhoto = photos[0];
-      if (!frontPhoto) return;
+      const frontPhoto = photoSlots.front;
+      if (!frontPhoto) {
+        setError("Add a front photo before using AI identification.");
+        return;
+      }
 
       const reader = new FileReader();
       const dataUrl = await new Promise<string>((resolve) => {
@@ -249,6 +261,10 @@ export default function CreateListing() {
       setError("Listing title is empty. Go back and check card details.");
       return;
     }
+    if (!photoSlots.front) {
+      setError("Add a front photo before saving this draft.");
+      return;
+    }
 
     setError("");
     setSaving(true);
@@ -347,7 +363,8 @@ export default function CreateListing() {
           <CardHeader>
             <CardTitle>Upload Card Photos</CardTitle>
             <p className="mt-1 text-sm text-muted-foreground">
-              Upload photos of <span className="font-medium">one card</span> (front, back, etc.). Listing multiple different cards?{" "}
+              Add the actual card front and back. Optional extra images publish
+              to eBay as listing photos. Listing multiple different cards?{" "}
               <button
                 type="button"
                 onClick={() => navigate("/listings/batch")}
@@ -359,14 +376,9 @@ export default function CreateListing() {
             </p>
           </CardHeader>
           <CardContent className="space-y-4">
-            <PhotoUploader
-              photos={photos}
-              onChange={setPhotos}
-              labels={
-                card.card_type === "graded"
-                  ? ["Front", "Back", "Label/Grade", "Extra"]
-                  : undefined
-              }
+            <ListingPhotoSlotsUploader
+              slots={photoSlots}
+              onChange={setPhotoSlots}
             />
 
             {/* Three-option fork: Search / AI identify / Manual entry */}
@@ -387,7 +399,7 @@ export default function CreateListing() {
                     setStep("identify");
                     handleIdentify();
                   }}
-                  disabled={photos.length === 0}
+                  disabled={!photoSlots.front}
                   className="flex-1"
                 >
                   Auto-Identify with AI
@@ -752,14 +764,18 @@ export default function CreateListing() {
             <CardContent className="space-y-4">
               {/* Photos preview */}
               {photos.length > 0 && (
-                <div className="flex gap-2 overflow-x-auto">
-                  {photos.map((p, i) => (
-                    <img
-                      key={p.preview}
-                      src={p.preview}
-                      alt={`Photo ${i + 1}`}
-                      className="h-24 w-24 shrink-0 rounded-lg border object-cover"
-                    />
+                <div className="flex gap-3 overflow-x-auto">
+                  {photos.map((p) => (
+                    <div key={p.preview} className="shrink-0">
+                      <img
+                        src={p.preview}
+                        alt={`${formatPhotoSlotLabel(p.slot)} photo`}
+                        className="h-24 w-24 rounded-lg border object-cover"
+                      />
+                      <p className="mt-1 text-center text-xs text-muted-foreground">
+                        {formatPhotoSlotLabel(p.slot)}
+                      </p>
+                    </div>
                   ))}
                 </div>
               )}
@@ -833,6 +849,12 @@ export default function CreateListing() {
       )}
     </div>
   );
+}
+
+function formatPhotoSlotLabel(slot: ListingPhotoSlotKey): string {
+  if (slot === "front") return "Front";
+  if (slot === "back") return "Back";
+  return "Extra";
 }
 
 function buildCreateDescriptionPreview(

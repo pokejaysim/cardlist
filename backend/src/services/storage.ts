@@ -31,4 +31,40 @@ export async function uploadPhoto(
   });
 }
 
+export async function uploadSellerLogo(
+  fileBuffer: Buffer,
+  userId: string,
+): Promise<{ url: string; publicId: string }> {
+  return new Promise((resolve, reject) => {
+    cloudinary.uploader
+      .upload_stream(
+        {
+          folder: `snapcard/assets/logos/${userId}`,
+          resource_type: "image",
+          public_id: "seller-logo",
+          overwrite: true,
+          invalidate: true,
+        },
+        (error, result) => {
+          if (error || !result) {
+            reject(error ?? new Error("Logo upload failed"));
+            return;
+          }
+
+          const url = cloudinary.url(result.public_id, {
+            secure: true,
+            version: result.version,
+            width: 800,
+            crop: "limit",
+            quality: "auto",
+            fetch_format: "auto",
+          });
+
+          resolve({ url, publicId: result.public_id });
+        }
+      )
+      .end(fileBuffer);
+  });
+}
+
 export { cloudinary };
