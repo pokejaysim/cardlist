@@ -67,7 +67,10 @@ export function ListingPhotoSlotsUploader({
   onChange,
 }: ListingPhotoSlotsUploaderProps) {
   const bulkInputRef = useRef<HTMLInputElement>(null);
-  const [dragOver, setDragOver] = useState(false);
+  const [bulkDragOver, setBulkDragOver] = useState(false);
+  const [slotDragOver, setSlotDragOver] = useState<ListingPhotoSlotKey | null>(
+    null,
+  );
 
   function createSlotPhoto(
     file: File,
@@ -131,27 +134,27 @@ export function ListingPhotoSlotsUploader({
   function handleDrop(event: React.DragEvent<HTMLDivElement>) {
     event.preventDefault();
     event.stopPropagation();
-    setDragOver(false);
+    setBulkDragOver(false);
     assignFilesByOrder(event.dataTransfer.files);
   }
 
   return (
     <div className="space-y-4">
-      <div
-        onDragOver={(event) => {
-          event.preventDefault();
-          setDragOver(true);
-        }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={handleDrop}
-        className={`rounded-xl border-2 border-dashed p-4 transition ${
-          dragOver
-            ? "border-primary bg-primary/5"
-            : "border-muted-foreground/25"
-        }`}
-      >
+      <div className="rounded-xl border p-4">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
+          <div
+            onDragOver={(event) => {
+              event.preventDefault();
+              setBulkDragOver(true);
+            }}
+            onDragLeave={() => setBulkDragOver(false)}
+            onDrop={handleDrop}
+            className={`rounded-lg border-2 border-dashed p-3 transition sm:flex-1 ${
+              bulkDragOver
+                ? "border-primary bg-primary/5"
+                : "border-transparent bg-muted/30"
+            }`}
+          >
             <p className="text-sm font-medium">Front, back, then optional extra</p>
             <p className="text-xs text-muted-foreground">
               Drop up to 3 images here. File 1 = front, file 2 = back, file 3 = extra.
@@ -184,6 +187,15 @@ export function ListingPhotoSlotsUploader({
               photo={slots[slot.key]}
               onReplace={(file) => replaceSlot(slot.key, file)}
               onRemove={() => removeSlot(slot.key)}
+              dragOver={slotDragOver === slot.key}
+              onDragOver={() => setSlotDragOver(slot.key)}
+              onDragLeave={() => setSlotDragOver((current) =>
+                current === slot.key ? null : current,
+              )}
+              onDrop={(file) => {
+                setSlotDragOver(null);
+                replaceSlot(slot.key, file);
+              }}
             />
           ))}
         </div>
@@ -224,16 +236,43 @@ function PhotoSlotCard({
   photo,
   onReplace,
   onRemove,
+  dragOver,
+  onDragOver,
+  onDragLeave,
+  onDrop,
 }: {
   slot: (typeof SLOT_DEFINITIONS)[number];
   photo: ListingPhotoSlotFile | null;
   onReplace: (file: File | undefined) => void;
   onRemove: () => void;
+  dragOver: boolean;
+  onDragOver: () => void;
+  onDragLeave: () => void;
+  onDrop: (file: File | undefined) => void;
 }) {
   const inputId = `listing-photo-slot-${slot.key}`;
 
   return (
-    <div className="rounded-lg border bg-background p-3">
+    <div
+      onDragOver={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onDragOver();
+      }}
+      onDragLeave={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onDragLeave();
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onDrop(event.dataTransfer.files[0]);
+      }}
+      className={`rounded-lg border bg-background p-3 transition ${
+        dragOver ? "border-primary bg-primary/5 ring-2 ring-primary/20" : ""
+      }`}
+    >
       <div className="mb-2 flex items-center justify-between gap-2">
         <div>
           <p className="text-sm font-medium">
