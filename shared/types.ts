@@ -98,7 +98,13 @@ export interface EbayPublishReadiness {
 
 // ── Listings ───────────────────────────────────────────
 
-export type ListingStatus = "draft" | "publishing" | "scheduled" | "published" | "error";
+export type ListingStatus =
+  | "draft"
+  | "publishing"
+  | "scheduled"
+  | "published"
+  | "error"
+  | "archived";
 export type ListingType = "auction" | "fixed_price";
 export type CardCondition = "NM" | "LP" | "MP" | "HP" | "DMG";
 export type CardGame = "pokemon";

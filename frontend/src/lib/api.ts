@@ -39,7 +39,12 @@ function devMockResponse<T>(path: string, options?: RequestInit): T | null {
 
   // GET /listings
   if (path === "/listings" && method === "GET") {
-    return DEV_LISTINGS as unknown as T;
+    return DEV_LISTINGS
+      .filter((listing) => listing.status !== "archived")
+      .map((listing) => ({
+        ...listing,
+        photos: DEV_PHOTOS[listing.id] ?? [],
+      })) as unknown as T;
   }
 
   // POST /listings (save draft) — add to session list
@@ -117,6 +122,14 @@ function devMockResponse<T>(path: string, options?: RequestInit): T | null {
     const idx = DEV_LISTINGS.findIndex((l) => l.id === deleteMatch[1]);
     if (idx !== -1) DEV_LISTINGS.splice(idx, 1);
     return { ok: true } as unknown as T;
+  }
+
+  // PATCH /listings/:id/archive
+  const archiveMatch = path.match(/^\/listings\/([\w-]+)\/archive$/);
+  if (archiveMatch && method === "PATCH") {
+    const listing = DEV_LISTINGS.find((l) => l.id === archiveMatch[1]);
+    if (listing) listing.status = "archived";
+    return { ok: true, listing } as unknown as T;
   }
 
   // POST /listings/:id/publish
