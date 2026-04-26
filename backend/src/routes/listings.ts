@@ -223,6 +223,7 @@ router.get("/listings", requireAuth, async (req, res) => {
     .from("listings")
     .select("*")
     .eq("user_id", authReq.userId)
+    .neq("status", "archived")
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -230,7 +231,43 @@ router.get("/listings", requireAuth, async (req, res) => {
     return;
   }
 
-  res.json(data ?? []);
+  const listings = (data as Array<Record<string, unknown>> | null) ?? [];
+  const listingIds = listings
+    .map((listing) => listing.id)
+    .filter((id): id is string => typeof id === "string");
+
+  const photosByListingId = new Map<string, Array<Record<string, unknown>>>();
+
+  if (listingIds.length > 0) {
+    const { data: photos, error: photosError } = await supabase
+      .from("photos")
+      .select("id, listing_id, file_url, ebay_url, position")
+      .in("listing_id", listingIds)
+      .order("position", { ascending: true });
+
+    if (photosError) {
+      res.status(500).json({ error: "Failed to fetch listing photos", code: "DB_ERROR" });
+      return;
+    }
+
+    for (const photo of (photos as Array<Record<string, unknown>> | null) ?? []) {
+      const listingId = photo.listing_id;
+      if (typeof listingId !== "string") continue;
+      const existing = photosByListingId.get(listingId) ?? [];
+      existing.push(photo);
+      photosByListingId.set(listingId, existing);
+    }
+  }
+
+  res.json(
+    listings.map((listing) => ({
+      ...listing,
+      photos:
+        typeof listing.id === "string"
+          ? photosByListingId.get(listing.id) ?? []
+          : [],
+    })),
+  );
 });
 
 // ── Get single listing ─────────────────────────────────
@@ -426,12 +463,64 @@ router.delete("/listings/:id", requireAuth, async (req, res) => {
   }
 
   if (existing.status === "published") {
-    res.status(400).json({ error: "Cannot delete published listings", code: "INVALID_STATUS" });
+    res.status(400).json({
+      error: "Published listings cannot be deleted from SnapCard because that would not end the live eBay listing. Hide it from the dashboard instead.",
+      code: "INVALID_STATUS",
+    });
+    return;
+  }
+
+  if (existing.status === "publishing" || existing.status === "scheduled") {
+    res.status(400).json({
+      error: "Wait until publishing finishes, or cancel the scheduled publish before deleting this listing.",
+      code: "INVALID_STATUS",
+    });
     return;
   }
 
   await supabase.from("listings").delete().eq("id", req.params.id);
   res.json({ message: "Listing deleted" });
+});
+
+// ── Hide listing from dashboard ────────────────────────
+
+router.patch("/listings/:id/archive", requireAuth, async (req, res) => {
+  const authReq = req as AuthenticatedRequest;
+
+  const { data: existing } = await supabase
+    .from("listings")
+    .select("status")
+    .eq("id", req.params.id)
+    .eq("user_id", authReq.userId)
+    .single();
+
+  if (!existing) {
+    res.status(404).json({ error: "Listing not found" });
+    return;
+  }
+
+  if (existing.status === "publishing" || existing.status === "scheduled") {
+    res.status(400).json({
+      error: "Wait until publishing finishes, or cancel the scheduled publish before hiding this listing.",
+      code: "INVALID_STATUS",
+    });
+    return;
+  }
+
+  const { data, error } = await supabase
+    .from("listings")
+    .update({ status: "archived" })
+    .eq("id", req.params.id)
+    .eq("user_id", authReq.userId)
+    .select()
+    .single();
+
+  if (error) {
+    res.status(500).json({ error: "Failed to hide listing", code: "DB_ERROR" });
+    return;
+  }
+
+  res.json({ message: "Listing hidden from dashboard", listing: data });
 });
 
 // ── Regenerate title/description ───────────────────────
