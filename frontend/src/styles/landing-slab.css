@@ -1,0 +1,384 @@
+/* ════════════════════════════════════════════════
+   Landing B v2 — Slab/Scanner visual system.
+
+   All styles scoped under .slab-theme so they don't
+   leak into the rest of the app (which still uses
+   the emerald shadcn theme).
+   ════════════════════════════════════════════════ */
+
+.slab-theme {
+  --ink: #0e0e10;
+  --ink-soft: #4a4a52;
+  --paper: #fefdf6;
+  --paper-2: #f5f1e1;
+  --line-faint: #d4cfb8;
+  --accent: hsl(48 98% 52%);
+  --accent-soft: hsl(48 95% 88%);
+  --accent-2: hsl(0 0% 8%);
+  --annotation: #c44536;
+
+  --font-hand: "Caveat", cursive;
+  --font-marker: "Architects Daughter", cursive;
+  --font-mono: "JetBrains Mono", monospace;
+
+  background: var(--paper);
+  background-image:
+    radial-gradient(circle at 25% 30%, rgba(0,0,0,0.015) 0%, transparent 40%),
+    radial-gradient(circle at 75% 60%, rgba(0,0,0,0.015) 0%, transparent 40%);
+  color: var(--ink);
+  font-family: "Kalam", "Architects Daughter", cursive;
+  font-size: 15px;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+
+.slab-theme * {
+  box-sizing: border-box;
+}
+
+/* Hand-written display font */
+.slab-theme .hand {
+  font-family: var(--font-hand);
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+/* Underline doodle (squiggly yellow underline under headline phrases) */
+.slab-theme .underline-doodle {
+  position: relative;
+  display: inline-block;
+}
+.slab-theme .underline-doodle::after {
+  content: "";
+  position: absolute;
+  left: -4px;
+  right: -4px;
+  bottom: -8px;
+  height: 8px;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 8' preserveAspectRatio='none'><path d='M0,5 Q25,1 50,4 T100,3' stroke='%23eab308' stroke-width='3' fill='none' stroke-linecap='round'/></svg>");
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+}
+
+/* ── PSA-style slab (label band on top, viewport, optional foot) ── */
+.slab-theme .slab {
+  background: var(--paper);
+  border: 2.5px solid var(--ink);
+  border-radius: 4px;
+  position: relative;
+  box-shadow: 4px 4px 0 var(--ink);
+}
+.slab-theme .slab-label {
+  background: var(--ink);
+  color: var(--paper);
+  padding: 8px 14px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  line-height: 1;
+}
+.slab-theme .slab-label .grade {
+  background: var(--accent);
+  color: var(--ink);
+  padding: 3px 8px;
+  font-weight: 700;
+  border-radius: 2px;
+  letter-spacing: 1px;
+}
+.slab-theme .slab-label .cert {
+  opacity: 0.7;
+  font-size: 10px;
+}
+.slab-theme .slab-body {
+  padding: 18px;
+  background: var(--paper);
+  position: relative;
+}
+.slab-theme .slab-foot {
+  border-top: 1.5px solid var(--ink);
+  padding: 8px 14px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--ink-soft);
+  background: var(--paper-2);
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.slab-theme .slab.yellow .slab-label {
+  background: var(--accent);
+  color: var(--ink);
+}
+.slab-theme .slab.yellow .slab-label .grade {
+  background: var(--ink);
+  color: var(--accent);
+}
+
+/* ── Vintage paper price tag with a string-hole ── */
+.slab-theme .price-tag {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent);
+  color: var(--ink);
+  border: 2px solid var(--ink);
+  padding: 14px 18px 12px 28px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  position: relative;
+  clip-path: polygon(14px 0, 100% 0, 100% 100%, 14px 100%, 0 50%);
+  box-shadow: 3px 3px 0 var(--ink);
+  line-height: 1;
+}
+.slab-theme .price-tag::before {
+  content: "";
+  position: absolute;
+  left: 9px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 6px;
+  height: 6px;
+  border: 1.5px solid var(--ink);
+  border-radius: 50%;
+  background: var(--paper);
+}
+.slab-theme .price-tag .pt-amt {
+  font-size: 22px;
+  letter-spacing: -0.5px;
+}
+.slab-theme .price-tag .pt-meta {
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  margin-top: 3px;
+  opacity: 0.8;
+}
+
+/* ── Monospace metadata chip ── */
+.slab-theme .chip-mono {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  background: var(--paper-2);
+  border: 1.5px solid var(--ink);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  font-weight: 500;
+  border-radius: 2px;
+}
+.slab-theme .chip-mono.solid {
+  background: var(--ink);
+  color: var(--paper);
+}
+.slab-theme .chip-mono.accent {
+  background: var(--accent);
+  color: var(--ink);
+}
+
+/* ── Inventory ticket (paper-tag with eyelets) ── */
+.slab-theme .ticket {
+  background: var(--paper);
+  border: 1.5px solid var(--ink);
+  padding: 10px 14px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+.slab-theme .ticket::before,
+.slab-theme .ticket::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 8px;
+  height: 8px;
+  border: 1.5px solid var(--ink);
+  border-radius: 50%;
+  background: var(--paper-2);
+}
+.slab-theme .ticket::before { left: -5px; }
+.slab-theme .ticket::after { right: -5px; }
+
+/* ── Halftone dot patterns (background texture) ── */
+.slab-theme .halftone {
+  background-image: radial-gradient(circle, var(--ink) 1px, transparent 1.5px);
+  background-size: 8px 8px;
+  background-position: 0 0;
+}
+.slab-theme .halftone-soft {
+  background-image: radial-gradient(circle, rgba(0,0,0,0.18) 0.8px, transparent 1.2px);
+  background-size: 6px 6px;
+}
+
+/* ── Card-grid wallpaper (binder-pages background) ── */
+.slab-theme .card-grid-bg {
+  background-image:
+    linear-gradient(to right, rgba(0,0,0,0.08) 1.5px, transparent 1.5px),
+    linear-gradient(to bottom, rgba(0,0,0,0.08) 1.5px, transparent 1.5px);
+  background-size: 56px 78px;
+}
+
+/* ── Scanner overlay (yellow sweep line + corner brackets) ── */
+@keyframes slab-scan-sweep {
+  0%   { top: 0; opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { top: 100%; opacity: 0; }
+}
+.slab-theme .scan-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.slab-theme .scan-line {
+  position: absolute;
+  left: -2px;
+  right: -2px;
+  height: 4px;
+  background: linear-gradient(to bottom,
+    transparent 0%,
+    var(--accent) 50%,
+    transparent 100%);
+  box-shadow: 0 0 18px 4px var(--accent), 0 0 2px 0 var(--accent);
+  animation: slab-scan-sweep 2.4s ease-in-out;
+}
+.slab-theme .scan-corner {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border: 2.5px solid var(--accent);
+}
+.slab-theme .scan-corner.tl { top: -2px; left: -2px; border-right: none; border-bottom: none; }
+.slab-theme .scan-corner.tr { top: -2px; right: -2px; border-left: none; border-bottom: none; }
+.slab-theme .scan-corner.bl { bottom: -2px; left: -2px; border-right: none; border-top: none; }
+.slab-theme .scan-corner.br { bottom: -2px; right: -2px; border-left: none; border-top: none; }
+
+/* ── Auction-floor marquee ── */
+@keyframes slab-marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+.slab-theme .marquee {
+  overflow: hidden;
+  border-top: 2px solid var(--ink);
+  border-bottom: 2px solid var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+  padding: 10px 0;
+}
+.slab-theme .marquee-track {
+  display: inline-flex;
+  gap: 32px;
+  white-space: nowrap;
+  animation: slab-marquee 40s linear infinite;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+.slab-theme .marquee-track .dot { color: var(--accent); }
+
+/* ── Holo card (iridescent shimmer) ── */
+@keyframes slab-holo {
+  0%, 100% { background-position: 0% 0%; }
+  50% { background-position: 100% 100%; }
+}
+.slab-theme .holo {
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(135deg,
+      hsla(48, 95%, 70%, 0.4) 0%,
+      hsla(330, 80%, 75%, 0.3) 30%,
+      hsla(195, 80%, 75%, 0.3) 60%,
+      hsla(48, 95%, 70%, 0.4) 100%),
+    var(--paper-2);
+  background-size: 200% 200%;
+  animation: slab-holo 5s ease-in-out infinite;
+}
+.slab-theme .holo::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle, rgba(255,255,255,0.4) 0.5px, transparent 1px);
+  background-size: 4px 4px;
+  pointer-events: none;
+}
+
+/* ── Verified ink stamp ── */
+.slab-theme .stamp {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 78px;
+  height: 78px;
+  border: 2.5px solid var(--annotation);
+  color: var(--annotation);
+  border-radius: 50%;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 10px;
+  text-align: center;
+  line-height: 1.1;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  transform: rotate(-8deg);
+  opacity: 0.85;
+  padding: 4px;
+  position: relative;
+}
+.slab-theme .stamp::before {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border: 1.5px solid var(--annotation);
+  border-radius: 50%;
+}
+
+/* ── Slab button (yellow CTA on ink border) ── */
+.slab-theme .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: 1.5px solid var(--ink);
+  border-radius: 6px;
+  font-family: var(--font-hand);
+  font-weight: 600;
+  font-size: 16px;
+  background: transparent;
+  color: var(--ink);
+  white-space: nowrap;
+  cursor: pointer;
+  text-decoration: none;
+  transition: transform 0.1s ease;
+}
+.slab-theme .btn:hover { transform: translate(-1px, -1px); }
+.slab-theme .btn:active { transform: translate(0, 0); }
+.slab-theme .btn.primary {
+  background: var(--accent);
+  color: var(--ink);
+  border-color: var(--ink);
+  box-shadow: 3px 3px 0 var(--ink);
+}
+.slab-theme .btn.primary:hover { box-shadow: 4px 4px 0 var(--ink); }
+.slab-theme .btn.primary:active { box-shadow: 1px 1px 0 var(--ink); }
+.slab-theme .btn.sm  { padding: 4px 10px; font-size: 14px; }
+.slab-theme .btn.lg  { padding: 12px 22px; font-size: 18px; }
