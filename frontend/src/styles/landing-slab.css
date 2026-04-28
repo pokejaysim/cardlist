@@ -17,16 +17,19 @@
   --accent-2: hsl(0 0% 8%);
   --annotation: #c44536;
 
-  --font-hand: "Caveat", cursive;
-  --font-marker: "Architects Daughter", cursive;
-  --font-mono: "JetBrains Mono", monospace;
+  /* Display serif for headlines — variable opsz, distinct but legible. */
+  --font-hand: "Fraunces", "Georgia", serif;
+  /* Body sans — used for muted body copy and helper text. */
+  --font-marker: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* Monospace for metadata strips, chips, and labels. */
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
   background: var(--paper);
   background-image:
     radial-gradient(circle at 25% 30%, rgba(0,0,0,0.015) 0%, transparent 40%),
     radial-gradient(circle at 75% 60%, rgba(0,0,0,0.015) 0%, transparent 40%);
   color: var(--ink);
-  font-family: "Kalam", "Architects Daughter", cursive;
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
   font-size: 15px;
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
@@ -36,11 +39,15 @@
   box-sizing: border-box;
 }
 
-/* Hand-written display font */
+/* Display headline font — Fraunces. We force a heavier default weight
+ * since most call sites previously relied on Caveat's natural visual
+ * weight at the same numeric value. Tighter tracking matches the
+ * editorial feel without needing to touch every call site. */
 .slab-theme .hand {
   font-family: var(--font-hand);
-  font-weight: 600;
-  letter-spacing: 0;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  font-feature-settings: "ss01", "ss02";
 }
 
 /* Underline doodle (squiggly yellow underline under headline phrases) */
