@@ -1,11 +1,18 @@
-import { useState } from "react";
+/**
+ * Create Listing — slab/scanner edition.
+ *
+ * 5-step wizard: Photos → Find Card → Details → Pricing → Preview. Every
+ * piece of business logic from the previous shadcn version is preserved
+ * verbatim — only the visual layer is rebuilt around the slab system.
+ *
+ * Subcomponents that have their own internal styling (PricingSuggestion,
+ * ListingPhotoSlotsUploader, CardSearch) are wrapped in slabs but not
+ * themselves rebuilt yet — they can be migrated later without touching
+ * the wizard's flow.
+ */
+import { useState, type CSSProperties, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import {
   EMPTY_LISTING_PHOTO_SLOTS,
   ListingPhotoSlotsUploader,
@@ -15,15 +22,15 @@ import {
 } from "@/components/ListingPhotoSlots";
 import { PricingSuggestion } from "@/components/PricingSuggestion";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
-import { apiFetch, apiUpload } from "@/lib/api";
 import { CardSearch } from "@/components/CardSearch";
+import { apiFetch, apiUpload } from "@/lib/api";
 import {
   fallbackDescriptionPreview,
   renderDescriptionTemplatePreview,
 } from "@/lib/descriptionTemplatePreview";
+import { Slab, SlabButton, ChipMono } from "@/components/slab";
 import {
   ArrowLeft,
-  ArrowRight,
   Loader2,
   Sparkles,
   Save,
@@ -64,13 +71,17 @@ const GRADING_COMPANIES = [
   { key: "SGC", label: "SGC" },
   { key: "other", label: "Other" },
 ] as const;
+
+// 5-step ticket bar across the top. "search" and "identify" both share the
+// same ticket cell (#02 · IDENTIFY) so the bar always shows 5 cells.
 const STEPS: { key: Step; label: string }[] = [
-  { key: "photos", label: "Photos" },
-  { key: "search", label: "Find Card" },
-  { key: "details", label: "Details" },
-  { key: "pricing", label: "Pricing" },
-  { key: "preview", label: "Preview" },
+  { key: "photos",  label: "SCAN" },
+  { key: "search",  label: "IDENTIFY" },
+  { key: "details", label: "GRADE" },
+  { key: "pricing", label: "PRICE" },
+  { key: "preview", label: "PUBLISH" },
 ];
+
 const CANADA_BETA_CONFIG = EBAY_MARKETPLACE_CONFIG[CANADA_BETA_MARKETPLACE_ID];
 
 export default function CreateListing() {
@@ -113,12 +124,15 @@ export default function CreateListing() {
 
   const [generatedTitle, setGeneratedTitle] = useState("");
   const [listingType, setListingType] = useState<"auction" | "fixed_price">(
-    "auction"
+    "auction",
   );
   const [price, setPrice] = useState("");
 
   const photos = listingPhotoSlotsToArray(photoSlots);
-  const currentStepIndex = STEPS.findIndex((s) => s.key === step);
+  // For ticket coloring, "identify" rolls up to the IDENTIFY cell (search/identify).
+  const ticketStep: Step = step === "identify" ? "search" : step;
+  const currentStepIndex = STEPS.findIndex((s) => s.key === ticketStep);
+
   const descriptionPreviewHtml = buildCreateDescriptionPreview(
     generatedTitle,
     card,
@@ -184,8 +198,6 @@ export default function CreateListing() {
     }
   }
 
-  // ── Manual entry: skip identification ───────────────
-
   function handleManualEntry() {
     setIdentifiedBy("manual");
     setCard({
@@ -239,8 +251,6 @@ export default function CreateListing() {
     setStep("pricing");
   }
 
-  // ── Step 3: Generate title/desc preview ──────────────
-
   function goToPreview() {
     const err = validatePricing();
     if (err) {
@@ -252,10 +262,9 @@ export default function CreateListing() {
     setStep("preview");
   }
 
-  // ── Step 4: Save listing ─────────────────────────────
+  // ── Save ─────────────────────────────────────────────
 
   async function handleSave() {
-    // Final validation before saving
     const detailsErr = validateDetails();
     if (detailsErr) {
       setError(detailsErr);
@@ -279,7 +288,6 @@ export default function CreateListing() {
     setSaving(true);
 
     try {
-      // 1. Create the draft listing
       const listing = await apiFetch<{ id: string }>("/listings", {
         method: "POST",
         body: JSON.stringify({
@@ -291,9 +299,11 @@ export default function CreateListing() {
           condition: card.card_type === "raw" ? card.condition : undefined,
           card_game: card.card_game || undefined,
           card_type: card.card_type,
-          grading_company: card.card_type === "graded" ? card.grading_company || undefined : undefined,
+          grading_company:
+            card.card_type === "graded" ? card.grading_company || undefined : undefined,
           grade: card.card_type === "graded" ? card.grade || undefined : undefined,
-          cert_number: card.card_type === "graded" ? card.cert_number || undefined : undefined,
+          cert_number:
+            card.card_type === "graded" ? card.cert_number || undefined : undefined,
           identified_by: identifiedBy,
           listing_type: listingType,
           price_cad: price ? parseFloat(price) : undefined,
@@ -302,14 +312,12 @@ export default function CreateListing() {
         }),
       });
 
-      // 2. Upload photos to the listing
       if (photos.length > 0) {
         for (const photo of photos) {
           const formData = new FormData();
           formData.append("photo", photo.file);
           formData.append("listing_id", listing.id);
           formData.append("position", String(photo.position));
-
           await apiUpload("/photos", formData);
         }
       }
@@ -333,110 +341,241 @@ export default function CreateListing() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-8">
-      {/* Upgrade modal */}
+    <div style={{ padding: "20px 16px 60px", maxWidth: 1100, margin: "0 auto" }}>
       {showUpgrade && <UpgradePrompt onClose={() => setShowUpgrade(false)} />}
 
-      {/* Header */}
-      <div className="mb-6 flex items-center gap-3">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => navigate("/dashboard")}
-        >
-          <ArrowLeft className="size-4" />
-        </Button>
-        <h1 className="text-2xl font-bold">New Listing</h1>
-      </div>
-
-      {/* Step indicator */}
-      <div className="mb-8 flex gap-1">
-        {STEPS.map((s, i) => (
+      {/* ── Header ── */}
+      <div className="cl-header">
+        <div>
+          <button
+            type="button"
+            onClick={() => navigate("/dashboard")}
+            style={{
+              background: "transparent",
+              border: "none",
+              padding: 0,
+              cursor: "pointer",
+              fontFamily: "var(--font-mono)",
+              fontSize: 11,
+              letterSpacing: 2,
+              color: "var(--ink-soft)",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              textTransform: "uppercase",
+            }}
+          >
+            <ArrowLeft className="size-3" />
+            BACK · MODULE 02 · NEW LISTING
+          </button>
           <div
-            key={s.key}
-            className={`h-1.5 flex-1 rounded-full transition ${
-              i <= currentStepIndex ? "bg-primary" : "bg-muted"
-            }`}
-          />
-        ))}
+            className="hand"
+            style={{
+              fontSize: 36,
+              fontWeight: 700,
+              lineHeight: 1,
+              marginTop: 4,
+            }}
+          >
+            Grade a card.
+          </div>
+        </div>
       </div>
 
+      {/* ── Step ticket bar ── */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "stretch",
+          marginTop: 20,
+          border: "2px solid var(--ink)",
+          overflowX: "auto",
+        }}
+      >
+        {STEPS.map((s, i) => {
+          const done = currentStepIndex !== -1 && i < currentStepIndex;
+          const active = i === currentStepIndex;
+          return (
+            <div
+              key={s.key}
+              style={{
+                flex: 1,
+                minWidth: 110,
+                padding: "10px 14px",
+                background: active
+                  ? "var(--accent)"
+                  : done
+                    ? "var(--ink)"
+                    : "var(--paper)",
+                color: active
+                  ? "var(--ink)"
+                  : done
+                    ? "var(--paper)"
+                    : "var(--ink-soft)",
+                borderRight: i < STEPS.length - 1 ? "1.5px solid var(--ink)" : "none",
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                fontFamily: "var(--font-mono)",
+                fontSize: 11,
+                letterSpacing: 1.5,
+                fontWeight: active || done ? 700 : 500,
+              }}
+            >
+              <span
+                style={{
+                  background: active
+                    ? "var(--ink)"
+                    : done
+                      ? "var(--accent)"
+                      : "transparent",
+                  color: active
+                    ? "var(--accent)"
+                    : done
+                      ? "var(--ink)"
+                      : "var(--ink-soft)",
+                  padding: "2px 6px",
+                  fontWeight: 700,
+                  border: !active && !done ? "1.5px solid var(--ink-soft)" : "none",
+                }}
+              >
+                {String(i + 1).padStart(2, "0")}
+              </span>
+              <span>{s.label}</span>
+              {done && <span style={{ marginLeft: "auto" }}>✓</span>}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ── Error banner ── */}
       {error && (
-        <div className="mb-4 rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
-          {error}
+        <div
+          style={{
+            marginTop: 14,
+            background: "#c44536",
+            color: "var(--paper)",
+            padding: "8px 12px",
+            fontFamily: "var(--font-mono)",
+            fontSize: 11,
+            letterSpacing: 1,
+            border: "2px solid var(--ink)",
+          }}
+        >
+          ! {error}
         </div>
       )}
 
-      {/* ── Step 1: Photos ──────────────────────────── */}
-      {step === "photos" && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Upload Card Photos</CardTitle>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Add the actual card front and back. Optional extra images publish
-              to eBay as listing photos. Listing multiple different cards?{" "}
+      <div style={{ marginTop: 18 }}>
+        {/* ── Step 1: Photos ── */}
+        {step === "photos" && (
+          <Slab
+            label="PHOTOGRAPHIC EVIDENCE"
+            grade="01"
+            cert={`${String(photos.length)}/8 PHOTOS`}
+            foot={
+              <>
+                <span>FRONT REQUIRED</span>
+                <span>BACK + ANGLES OPTIONAL</span>
+              </>
+            }
+          >
+            <div
+              style={{
+                fontFamily: "var(--font-marker)",
+                fontSize: 14,
+                color: "var(--ink-soft)",
+                marginBottom: 14,
+                lineHeight: 1.5,
+              }}
+            >
+              Add the actual card front and back. Optional extras publish to
+              eBay as listing photos. Multiple cards?{" "}
               <button
                 type="button"
                 onClick={() => navigate("/listings/batch")}
-                className="font-medium text-primary underline-offset-2 hover:underline"
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  padding: 0,
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 11,
+                  letterSpacing: 1,
+                  color: "var(--ink)",
+                  fontWeight: 700,
+                  textDecoration: "underline",
+                  textDecorationColor: "var(--accent)",
+                  textDecorationThickness: 2,
+                  cursor: "pointer",
+                }}
               >
-                Use Batch Upload
-              </button>{" "}
-              instead.
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-4">
+                USE BATCH UPLOAD →
+              </button>
+            </div>
+
             <ListingPhotoSlotsUploader
               slots={photoSlots}
               onChange={setPhotoSlots}
             />
 
-            {/* Three-option fork: Search / AI identify / Manual entry */}
-            <div className="flex flex-col gap-3">
-              <Button
-                onClick={() => setStep("search")}
-                className="w-full"
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 12,
+                marginTop: 18,
+                paddingTop: 14,
+                borderTop: "1.5px dashed var(--ink)",
+              }}
+            >
+              <SlabButton
+                primary
                 size="lg"
+                onClick={() => setStep("search")}
+                style={{ width: "100%" }}
               >
-                Search by Card Name
-                <Search className="ml-1.5 size-4" />
-              </Button>
-
-              <div className="flex gap-3">
-                <Button
-                  variant="outline"
+                <Search className="size-4" />
+                SEARCH BY CARD NAME
+              </SlabButton>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 10,
+                }}
+              >
+                <SlabButton
                   onClick={() => {
                     setStep("identify");
-                    handleIdentify();
+                    void handleIdentify();
                   }}
                   disabled={!photoSlots.front}
-                  className="flex-1"
                 >
-                  Auto-Identify with AI
-                  <Sparkles className="ml-1.5 size-4" />
-                </Button>
-
-                <Button
-                  variant="outline"
-                  onClick={handleManualEntry}
-                  className="flex-1"
-                >
-                  Enter Manually
-                  <PenLine className="ml-1.5 size-4" />
-                </Button>
+                  <Sparkles className="size-4" />
+                  AUTO-IDENTIFY
+                </SlabButton>
+                <SlabButton onClick={handleManualEntry}>
+                  <PenLine className="size-4" />
+                  ENTER MANUALLY
+                </SlabButton>
               </div>
             </div>
-          </CardContent>
-        </Card>
-      )}
+          </Slab>
+        )}
 
-      {/* ── Step 2a: Card Search ─────────────────────── */}
-      {step === "search" && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Find Your Card</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
+        {/* ── Step 2a: Card search ── */}
+        {step === "search" && (
+          <Slab
+            label="FIND YOUR CARD"
+            grade="02"
+            cert="POKÉMON TCG DATABASE"
+            foot={
+              <>
+                <span>FREE LOOKUP</span>
+                <span>35,000+ SKUs</span>
+              </>
+            }
+          >
             <CardSearch
               onSelect={(detail: PokemonTcgCardDetail) => {
                 setCard({
@@ -458,84 +597,280 @@ export default function CreateListing() {
               }}
             />
 
-            <p className="text-xs text-muted-foreground">
-              Search the Pokemon TCG database to auto-fill card details. You'll still set condition and pricing yourself.
-            </p>
-
-            <div className="flex justify-between pt-2">
-              <Button variant="outline" onClick={() => setStep("photos")}>
-                <ArrowLeft className="mr-1.5 size-4" />
-                Back
-              </Button>
-              <Button variant="outline" onClick={handleManualEntry}>
-                Skip — Enter Manually
-                <PenLine className="ml-1.5 size-4" />
-              </Button>
+            <div
+              style={{
+                marginTop: 12,
+                padding: "8px 12px",
+                background: "var(--paper-2)",
+                border: "1.5px dashed var(--ink)",
+                fontFamily: "var(--font-mono)",
+                fontSize: 10,
+                letterSpacing: 1,
+                color: "var(--ink-soft)",
+                lineHeight: 1.5,
+              }}
+            >
+              SEARCH POKÉMON TCG TO AUTO-FILL CARD DETAILS. YOU'LL STILL SET
+              CONDITION + PRICING YOURSELF.
             </div>
-          </CardContent>
-        </Card>
-      )}
 
-      {/* ── Step 2b: Identifying ─────────────────────── */}
-      {step === "identify" && (
-        <Card>
-          <CardContent className="flex flex-col items-center gap-4 py-12">
-            <Loader2 className="size-10 animate-spin text-primary" />
-            <div className="text-center">
-              <p className="font-medium">Identifying your card...</p>
-              <p className="text-sm text-muted-foreground">
-                Claude Vision is analyzing the photo
-              </p>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                marginTop: 18,
+                paddingTop: 14,
+                borderTop: "1.5px dashed var(--ink)",
+              }}
+            >
+              <SlabButton onClick={() => setStep("photos")}>
+                <ArrowLeft className="size-4" />
+                BACK
+              </SlabButton>
+              <SlabButton onClick={handleManualEntry}>
+                SKIP — ENTER MANUALLY
+                <PenLine className="size-4" />
+              </SlabButton>
             </div>
-          </CardContent>
-        </Card>
-      )}
+          </Slab>
+        )}
 
-      {/* ── Step 3: Card Details ────────────────────── */}
-      {step === "details" && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>Card Details</CardTitle>
-              {card.confidence !== undefined && (
-                <Badge
-                  variant={card.confidence >= 0.8 ? "default" : "secondary"}
+        {/* ── Step 2b: Identifying (loading) ── */}
+        {step === "identify" && (
+          <Slab
+            label="SCANNING ARTWORK"
+            grade="02"
+            cert="OPUS VISION ENGINE"
+            foot={
+              <>
+                <span>~3-5 SECONDS</span>
+                <span>● LIVE</span>
+              </>
+            }
+          >
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 16,
+                padding: "32px 12px",
+                position: "relative",
+              }}
+            >
+              <div
+                style={{
+                  position: "relative",
+                  width: 140,
+                  aspectRatio: "5/7",
+                  border: "2px solid var(--ink)",
+                  background: "var(--paper-2)",
+                  overflow: "hidden",
+                }}
+              >
+                <div className="scan-overlay">
+                  <div className="scan-corner tl" />
+                  <div className="scan-corner tr" />
+                  <div className="scan-corner bl" />
+                  <div className="scan-corner br" />
+                  <div
+                    className="scan-line"
+                    style={{ animationIterationCount: "infinite" }}
+                  />
+                </div>
+              </div>
+              <div style={{ textAlign: "center" }}>
+                <div
+                  className="hand"
+                  style={{ fontSize: 22, fontWeight: 700, lineHeight: 1.1 }}
                 >
-                  {Math.round(card.confidence * 100)}% confidence
-                </Badge>
-              )}
+                  Identifying your card…
+                </div>
+                <div
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 10,
+                    letterSpacing: 1.5,
+                    color: "var(--ink-soft)",
+                    marginTop: 6,
+                  }}
+                >
+                  ◉ CLAUDE OPUS · MATCHING SET, NUMBER, RARITY
+                </div>
+              </div>
+              <Loader2
+                className="size-5 animate-spin"
+                style={{ color: "var(--ink-soft)" }}
+              />
             </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Reference image from Pokemon TCG search */}
-            {referenceImageUrl && identifiedBy === "pokemon_tcg" && (
-              <div className="flex items-start gap-3 rounded-lg border border-primary/20 bg-accent p-3">
-                <img
-                  src={referenceImageUrl}
-                  alt="Reference"
-                  className="h-24 w-auto shrink-0 rounded"
+          </Slab>
+        )}
+
+        {/* ── Step 3: Details ── */}
+        {step === "details" && (
+          <Slab
+            label="CARD DETAILS"
+            grade="03"
+            cert={
+              identifiedBy === "ai"
+                ? "AI VERIFIED"
+                : identifiedBy === "pokemon_tcg"
+                  ? "TCG MATCHED"
+                  : "MANUAL ENTRY"
+            }
+            foot={
+              <>
+                <span>VERIFY EVERY FIELD</span>
+                <span>RAW · GRADED</span>
+              </>
+            }
+          >
+            {/* AI confidence banner (if identified by AI) */}
+            {card.confidence !== undefined && (
+              <div
+                style={{
+                  background: "var(--ink)",
+                  color: "var(--paper)",
+                  padding: "10px 14px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  marginBottom: 16,
+                  position: "relative",
+                  overflow: "hidden",
+                }}
+              >
+                <div
+                  className="halftone"
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    opacity: 0.06,
+                  }}
                 />
-                <div className="min-w-0 text-xs text-muted-foreground">
-                  <p className="font-medium text-foreground">Reference image from Pokemon TCG database</p>
-                  <p className="mt-1">This is a stock image for reference only. Use your own photos for the eBay listing.</p>
+                <div
+                  style={{
+                    background: "var(--accent)",
+                    color: "var(--ink)",
+                    width: 32,
+                    height: 32,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontFamily: "var(--font-mono)",
+                    fontWeight: 700,
+                    fontSize: 13,
+                    border: "2px solid var(--paper)",
+                    flexShrink: 0,
+                    position: "relative",
+                  }}
+                >
+                  ★
+                </div>
+                <div style={{ position: "relative", flex: 1 }}>
+                  <div
+                    style={{
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 10,
+                      letterSpacing: 1.5,
+                      color: "var(--accent)",
+                    }}
+                  >
+                    SNAPCARD VERIFIED
+                  </div>
+                  <div
+                    className="hand"
+                    style={{
+                      fontSize: 16,
+                      fontWeight: 700,
+                      color: "var(--paper)",
+                    }}
+                  >
+                    Card identified — {Math.round(card.confidence * 100)}% match.
+                    Verify the fields below.
+                  </div>
                 </div>
               </div>
             )}
 
-            {/* Card Game — Pokemon only for now */}
-            <div className="flex items-center gap-2 rounded-md bg-muted px-3 py-2">
-              <Badge variant="secondary">Pokemon</Badge>
-              <span className="text-xs text-muted-foreground">
-                More card games coming soon
+            {/* Pokemon TCG reference image */}
+            {referenceImageUrl && identifiedBy === "pokemon_tcg" && (
+              <div
+                style={{
+                  display: "flex",
+                  gap: 12,
+                  alignItems: "flex-start",
+                  background: "var(--paper-2)",
+                  border: "1.5px solid var(--ink)",
+                  padding: 12,
+                  marginBottom: 16,
+                }}
+              >
+                <img
+                  src={referenceImageUrl}
+                  alt="Reference"
+                  style={{
+                    height: 110,
+                    width: "auto",
+                    border: "1.5px solid var(--ink)",
+                    flexShrink: 0,
+                  }}
+                />
+                <div style={{ minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 10,
+                      letterSpacing: 1.5,
+                      color: "var(--ink-soft)",
+                      fontWeight: 700,
+                    }}
+                  >
+                    REFERENCE · POKÉMON TCG DATABASE
+                  </div>
+                  <div
+                    style={{
+                      fontFamily: "var(--font-marker)",
+                      fontSize: 13,
+                      color: "var(--ink-soft)",
+                      marginTop: 4,
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    Stock image — for variant verification only. Use your own
+                    photos in the listing.
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Card game pill */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                marginBottom: 18,
+              }}
+            >
+              <ChipMono solid>★ POKÉMON</ChipMono>
+              <span
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 10,
+                  letterSpacing: 1,
+                  color: "var(--ink-soft)",
+                }}
+              >
+                MORE GAMES COMING SOON
               </span>
             </div>
 
             {/* Raw vs Graded toggle */}
-            <div className="space-y-2">
-              <Label>Card Type</Label>
-              <div className="flex gap-2">
-                <button
-                  type="button"
+            <SlabFieldGroup label="CARD TYPE">
+              <div style={{ display: "flex", gap: 8 }}>
+                <ToggleButton
+                  active={card.card_type === "raw"}
                   onClick={() => {
                     setCard((prev) => ({
                       ...prev,
@@ -546,16 +881,11 @@ export default function CreateListing() {
                       cert_number: "",
                     }));
                   }}
-                  className={`flex-1 rounded-md border px-3 py-2 text-sm font-medium transition ${
-                    card.card_type === "raw"
-                      ? "border-primary bg-primary text-primary-foreground"
-                      : "border-input hover:bg-accent"
-                  }`}
                 >
-                  Raw Card
-                </button>
-                <button
-                  type="button"
+                  RAW CARD
+                </ToggleButton>
+                <ToggleButton
+                  active={card.card_type === "graded"}
                   onClick={() => {
                     setCard((prev) => ({
                       ...prev,
@@ -563,161 +893,166 @@ export default function CreateListing() {
                       condition: "",
                     }));
                   }}
-                  className={`flex-1 rounded-md border px-3 py-2 text-sm font-medium transition ${
-                    card.card_type === "graded"
-                      ? "border-primary bg-primary text-primary-foreground"
-                      : "border-input hover:bg-accent"
-                  }`}
                 >
-                  Graded Card
-                </button>
+                  GRADED CARD
+                </ToggleButton>
               </div>
-              <p className="text-xs text-muted-foreground">
+              <div
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 10,
+                  letterSpacing: 0.5,
+                  color: "var(--ink-soft)",
+                  marginTop: 6,
+                }}
+              >
                 {card.card_type === "raw"
-                  ? "Ungraded card with condition rating"
-                  : "PSA, BGS, CGC, or SGC graded with numeric grade"}
-              </p>
-            </div>
+                  ? "Ungraded card · NM/LP/MP/HP/DMG"
+                  : "PSA · BGS · CGC · SGC slabs"}
+              </div>
+            </SlabFieldGroup>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="card_name">Card Name *</Label>
-                <Input
-                  id="card_name"
-                  value={card.card_name}
-                  onChange={(e) => updateCard("card_name", e.target.value)}
-                  placeholder="e.g. Charizard"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="set_name">Set / Expansion</Label>
-                <Input
-                  id="set_name"
-                  value={card.set_name}
-                  onChange={(e) => updateCard("set_name", e.target.value)}
-                  placeholder="e.g. Base Set"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="card_number">Card Number</Label>
-                <Input
-                  id="card_number"
-                  value={card.card_number}
-                  onChange={(e) => updateCard("card_number", e.target.value)}
-                  placeholder="e.g. 4/102"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="rarity">Rarity</Label>
-                <Input
-                  id="rarity"
-                  value={card.rarity}
-                  onChange={(e) => updateCard("rarity", e.target.value)}
-                  placeholder="e.g. Holo Rare"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="language">Language</Label>
-                <Input
-                  id="language"
-                  value={card.language}
-                  onChange={(e) => updateCard("language", e.target.value)}
-                />
-              </div>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 12,
+                marginTop: 14,
+              }}
+              className="cl-details-grid"
+            >
+              <SlabField
+                id="card_name"
+                label="CARD NAME *"
+                value={card.card_name}
+                onChange={(v) => updateCard("card_name", v)}
+                placeholder="e.g. Charizard"
+                required
+              />
+              <SlabField
+                id="set_name"
+                label="SET / EXPANSION"
+                value={card.set_name}
+                onChange={(v) => updateCard("set_name", v)}
+                placeholder="e.g. Base Set"
+              />
+              <SlabField
+                id="card_number"
+                label="CARD NUMBER"
+                value={card.card_number}
+                onChange={(v) => updateCard("card_number", v)}
+                placeholder="e.g. 4/102"
+              />
+              <SlabField
+                id="rarity"
+                label="RARITY"
+                value={card.rarity}
+                onChange={(v) => updateCard("rarity", v)}
+                placeholder="e.g. Holo Rare"
+              />
+              <SlabField
+                id="language"
+                label="LANGUAGE"
+                value={card.language}
+                onChange={(v) => updateCard("language", v)}
+              />
 
               {/* Condition (raw) or Grading (graded) */}
               {card.card_type === "raw" ? (
-                <div className="space-y-2">
-                  <Label>Condition</Label>
-                  <div className="flex gap-1.5">
+                <SlabFieldGroup label="CONDITION">
+                  <div style={{ display: "flex", gap: 6 }}>
                     {CONDITIONS.map((c) => (
-                      <button
+                      <ToggleButton
                         key={c}
-                        type="button"
+                        active={card.condition === c}
                         onClick={() => updateCard("condition", c)}
-                        className={`flex-1 rounded-md border px-2 py-1.5 text-xs font-medium transition ${
-                          card.condition === c
-                            ? "border-primary bg-primary text-primary-foreground"
-                            : "border-input hover:bg-accent"
-                        }`}
+                        size="sm"
                       >
                         {c}
-                      </button>
+                      </ToggleButton>
                     ))}
                   </div>
-                </div>
+                </SlabFieldGroup>
               ) : (
                 <>
-                  <div className="space-y-2">
-                    <Label>Grading Company *</Label>
-                    <div className="flex flex-wrap gap-1.5">
+                  <SlabFieldGroup label="GRADING COMPANY *">
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                       {GRADING_COMPANIES.map((g) => (
-                        <button
+                        <ToggleButton
                           key={g.key}
-                          type="button"
+                          active={card.grading_company === g.key}
                           onClick={() => updateCard("grading_company", g.key)}
-                          className={`rounded-md border px-3 py-1.5 text-xs font-medium transition ${
-                            card.grading_company === g.key
-                              ? "border-primary bg-primary text-primary-foreground"
-                              : "border-input hover:bg-accent"
-                          }`}
+                          size="sm"
                         >
                           {g.label}
-                        </button>
+                        </ToggleButton>
                       ))}
                     </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="grade">Grade *</Label>
-                    <Input
-                      id="grade"
-                      value={card.grade}
-                      onChange={(e) => updateCard("grade", e.target.value)}
-                      placeholder="e.g. 10, 9.5"
-                    />
-                  </div>
-                  <div className="space-y-2 sm:col-span-2">
-                    <Label htmlFor="cert_number">Certification #</Label>
-                    <Input
+                  </SlabFieldGroup>
+                  <SlabField
+                    id="grade"
+                    label="GRADE *"
+                    value={card.grade}
+                    onChange={(v) => updateCard("grade", v)}
+                    placeholder="e.g. 10, 9.5"
+                  />
+                  <div style={{ gridColumn: "1 / -1" }}>
+                    <SlabField
                       id="cert_number"
+                      label="CERT NUMBER"
                       value={card.cert_number}
-                      onChange={(e) => updateCard("cert_number", e.target.value)}
-                      placeholder="Optional, e.g. PSA cert number"
+                      onChange={(v) => updateCard("cert_number", v)}
+                      placeholder="Optional · PSA cert number"
                     />
-                    <p className="text-xs text-muted-foreground">
-                      SnapCard will try to read this from the slab label, but
-                      you can fix it manually if needed.
-                    </p>
+                    <div
+                      style={{
+                        fontFamily: "var(--font-mono)",
+                        fontSize: 10,
+                        letterSpacing: 0.5,
+                        color: "var(--ink-soft)",
+                        marginTop: 4,
+                      }}
+                    >
+                      SnapCard tries to read this off the slab — fix manually if needed.
+                    </div>
                   </div>
                 </>
               )}
             </div>
 
-            <div className="flex justify-between pt-2">
-              <Button variant="outline" onClick={() => setStep("photos")}>
-                <ArrowLeft className="mr-1.5 size-4" />
-                Back
-              </Button>
-              <Button
-                onClick={goToPricing}
-                disabled={!card.card_name}
-              >
-                Pricing
-                <ArrowRight className="ml-1.5 size-4" />
-              </Button>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                marginTop: 20,
+                paddingTop: 14,
+                borderTop: "1.5px dashed var(--ink)",
+              }}
+            >
+              <SlabButton onClick={() => setStep("photos")}>
+                <ArrowLeft className="size-4" />
+                BACK
+              </SlabButton>
+              <SlabButton primary onClick={goToPricing} disabled={!card.card_name}>
+                NEXT · PRICING →
+              </SlabButton>
             </div>
-          </CardContent>
-        </Card>
-      )}
+          </Slab>
+        )}
 
-      {/* ── Step 4: Pricing ────────────────────────── */}
-      {step === "pricing" && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Set Your Price</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
+        {/* ── Step 4: Pricing ── */}
+        {step === "pricing" && (
+          <Slab
+            label="SET YOUR PRICE"
+            grade="04"
+            cert="REAL SOLD COMPS"
+            foot={
+              <>
+                <span>PRICECHARTING + eBay</span>
+                <span>{CANADA_BETA_CONFIG.currency} ONLY</span>
+              </>
+            }
+          >
             <PricingSuggestion
               cardName={card.card_name}
               setName={card.set_name || null}
@@ -727,154 +1062,260 @@ export default function CreateListing() {
               onPriceChange={setPrice}
             />
 
-            <div className="space-y-2">
-              <Label>Listing Type</Label>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setListingType("auction")}
-                  className={`flex-1 rounded-md border px-3 py-2 text-sm font-medium transition ${
-                    listingType === "auction"
-                      ? "border-primary bg-primary text-primary-foreground"
-                      : "border-input hover:bg-accent"
-                  }`}
-                >
-                  Auction
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setListingType("fixed_price")}
-                  className={`flex-1 rounded-md border px-3 py-2 text-sm font-medium transition ${
-                    listingType === "fixed_price"
-                      ? "border-primary bg-primary text-primary-foreground"
-                      : "border-input hover:bg-accent"
-                  }`}
-                >
-                  Buy It Now
-                </button>
+            <div style={{ marginTop: 18 }}>
+              <SlabFieldGroup label="LISTING TYPE">
+                <div style={{ display: "flex", gap: 8 }}>
+                  <ToggleButton
+                    active={listingType === "auction"}
+                    onClick={() => setListingType("auction")}
+                  >
+                    AUCTION
+                  </ToggleButton>
+                  <ToggleButton
+                    active={listingType === "fixed_price"}
+                    onClick={() => setListingType("fixed_price")}
+                  >
+                    BUY IT NOW
+                  </ToggleButton>
+                </div>
+              </SlabFieldGroup>
+            </div>
+
+            <div
+              style={{
+                marginTop: 16,
+                background: "var(--paper-2)",
+                border: "1.5px solid var(--ink)",
+                padding: 12,
+              }}
+            >
+              <div
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 10,
+                  letterSpacing: 1.5,
+                  color: "var(--accent-2)",
+                  fontWeight: 700,
+                }}
+              >
+                ★ {CANADA_BETA_CONFIG.label.toUpperCase()} BETA · {CANADA_BETA_CONFIG.currency}
+              </div>
+              <div
+                style={{
+                  fontFamily: "var(--font-marker)",
+                  fontSize: 13,
+                  color: "var(--ink-soft)",
+                  marginTop: 4,
+                  lineHeight: 1.5,
+                }}
+              >
+                New beta listings publish to eBay.ca in CAD. US/international support
+                unlocks after the Canada workflow is proven.
               </div>
             </div>
 
-            <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm">
-              <p className="font-medium">
-                {CANADA_BETA_CONFIG.label} beta ({CANADA_BETA_CONFIG.currency})
-              </p>
-              <p className="mt-1 text-muted-foreground">
-                New beta listings publish to eBay.ca in CAD. US/international
-                support will unlock after the Canada workflow is proven.
-              </p>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                marginTop: 20,
+                paddingTop: 14,
+                borderTop: "1.5px dashed var(--ink)",
+              }}
+            >
+              <SlabButton onClick={() => setStep("details")}>
+                <ArrowLeft className="size-4" />
+                BACK
+              </SlabButton>
+              <SlabButton primary onClick={goToPreview}>
+                NEXT · PREVIEW →
+              </SlabButton>
             </div>
+          </Slab>
+        )}
 
-            <div className="flex justify-between pt-2">
-              <Button variant="outline" onClick={() => setStep("details")}>
-                <ArrowLeft className="mr-1.5 size-4" />
-                Back
-              </Button>
-              <Button onClick={goToPreview}>
-                Preview
-                <ArrowRight className="ml-1.5 size-4" />
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* ── Step 5: Preview & Save ──────────────────── */}
-      {step === "preview" && (
-        <div className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Listing Preview</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Photos preview */}
+        {/* ── Step 5: Preview & Save ── */}
+        {step === "preview" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <Slab
+              yellow
+              label="LISTING PREVIEW"
+              grade="05"
+              cert="DRAFT · NOT PUBLISHED YET"
+              foot={
+                <>
+                  <span>SAVES AS DRAFT</span>
+                  <span>PUBLISH FROM DASHBOARD</span>
+                </>
+              }
+            >
               {photos.length > 0 && (
-                <div className="flex gap-3 overflow-x-auto">
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 10,
+                    overflowX: "auto",
+                    marginBottom: 16,
+                    paddingBottom: 4,
+                  }}
+                >
                   {photos.map((p) => (
-                    <div key={p.preview} className="shrink-0">
+                    <div key={p.preview} style={{ flexShrink: 0 }}>
                       <img
                         src={p.preview}
                         alt={`${formatPhotoSlotLabel(p.slot)} photo`}
-                        className="h-24 w-24 rounded-lg border object-cover"
+                        style={{
+                          height: 96,
+                          width: 96,
+                          objectFit: "cover",
+                          border: "2px solid var(--ink)",
+                          display: "block",
+                        }}
                       />
-                      <p className="mt-1 text-center text-xs text-muted-foreground">
+                      <div
+                        style={{
+                          fontFamily: "var(--font-mono)",
+                          fontSize: 9,
+                          letterSpacing: 1.5,
+                          color: "var(--ink-soft)",
+                          textAlign: "center",
+                          marginTop: 4,
+                          textTransform: "uppercase",
+                        }}
+                      >
                         {formatPhotoSlotLabel(p.slot)}
-                      </p>
+                      </div>
                     </div>
                   ))}
                 </div>
               )}
 
-              {/* Title */}
-              <div className="space-y-1">
-                <Label>eBay Title ({generatedTitle.length}/80)</Label>
-                <Input
-                  value={generatedTitle}
-                  onChange={(e) =>
-                    setGeneratedTitle(e.target.value.slice(0, 80))
-                  }
-                />
-              </div>
+              <SlabField
+                id="ebay_title"
+                label={`EBAY TITLE · ${String(generatedTitle.length)}/80`}
+                value={generatedTitle}
+                onChange={(v) => setGeneratedTitle(v.slice(0, 80))}
+              />
 
-              {/* Description preview */}
-              <div className="space-y-2">
-                <Label>eBay Description Preview</Label>
+              <div style={{ marginTop: 16 }}>
                 <div
-                  className="max-h-96 overflow-auto rounded-md border bg-white p-3 text-sm text-slate-900"
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 10,
+                    letterSpacing: 1.5,
+                    color: "var(--ink-soft)",
+                    marginBottom: 6,
+                    fontWeight: 700,
+                  }}
+                >
+                  EBAY DESCRIPTION PREVIEW
+                </div>
+                <div
+                  style={{
+                    maxHeight: 384,
+                    overflow: "auto",
+                    border: "1.5px solid var(--ink)",
+                    background: "#fff",
+                    color: "#0e0e10",
+                    padding: 12,
+                    fontSize: 13,
+                    fontFamily: "system-ui, sans-serif",
+                  }}
                   dangerouslySetInnerHTML={{ __html: descriptionPreviewHtml }}
                 />
-                <p className="text-xs text-muted-foreground">
+                <div
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 10,
+                    letterSpacing: 0.5,
+                    color: "var(--ink-soft)",
+                    marginTop: 6,
+                  }}
+                >
                   {listingPreferences?.description_template_html?.trim()
-                    ? "This preview uses your saved Account HTML template filled with this card's details."
-                    : "No full HTML template is saved yet, so SnapCard will use its default generated description."}
-                </p>
-              </div>
-
-              {/* Pricing summary */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-md bg-muted p-2.5">
-                  <p className="text-xs text-muted-foreground">Type</p>
-                  <p className="text-sm font-medium">
-                    {listingType === "auction" ? "Auction" : "Buy It Now"}
-                  </p>
-                </div>
-                <div className="rounded-md bg-muted p-2.5">
-                  <p className="text-xs text-muted-foreground">Price ({CANADA_BETA_CURRENCY_CODE})</p>
-                  <p className="text-sm font-medium">
-                    {price ? `$${price}` : "Not set"}
-                  </p>
+                    ? "Filled from your saved Account HTML template."
+                    : "No saved template — using SnapCard's default description."}
                 </div>
               </div>
-            </CardContent>
-          </Card>
 
-          {/* Usage counter for free users */}
-          {usage?.listings_limit !== null && usage?.listings_limit !== undefined && (
-            <p className="text-center text-xs text-muted-foreground">
-              {usage.listings_this_month} / {usage.listings_limit} listings used
-              this month
-            </p>
-          )}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 10,
+                  marginTop: 16,
+                }}
+              >
+                <SummaryTile
+                  label="TYPE"
+                  value={listingType === "auction" ? "AUCTION" : "BUY IT NOW"}
+                />
+                <SummaryTile
+                  label={`PRICE · ${CANADA_BETA_CURRENCY_CODE}`}
+                  value={price ? `$${price}` : "NOT SET"}
+                  accent
+                />
+              </div>
+            </Slab>
 
-          <div className="flex justify-between">
-            <Button variant="outline" onClick={() => setStep("pricing")}>
-              <ArrowLeft className="mr-1.5 size-4" />
-              Back
-            </Button>
-            <Button onClick={handleSave} disabled={saving}>
-              {saving ? (
-                <Loader2 className="mr-1.5 size-4 animate-spin" />
-              ) : (
-                <Save className="mr-1.5 size-4" />
-              )}
-              {saving ? "Saving..." : "Save Draft"}
-            </Button>
+            {usage?.listings_limit !== null && usage?.listings_limit !== undefined && (
+              <div
+                style={{
+                  textAlign: "center",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 10,
+                  letterSpacing: 1,
+                  color: "var(--ink-soft)",
+                }}
+              >
+                {usage.listings_this_month} / {usage.listings_limit} LISTINGS USED THIS MONTH
+              </div>
+            )}
+
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                paddingTop: 4,
+              }}
+            >
+              <SlabButton onClick={() => setStep("pricing")}>
+                <ArrowLeft className="size-4" />
+                BACK
+              </SlabButton>
+              <SlabButton primary size="lg" onClick={handleSave} disabled={saving}>
+                {saving ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Save className="size-4" />
+                )}
+                {saving ? "SAVING…" : "▸ SAVE DRAFT"}
+              </SlabButton>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
+
+      {/* Page-local responsive */}
+      <style>{`
+        .cl-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-end;
+          gap: 16px;
+          flex-wrap: wrap;
+        }
+        @media (max-width: 600px) {
+          .cl-details-grid {
+            grid-template-columns: 1fr !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }
+
+// ── Helpers ────────────────────────────────────────────────
 
 function formatPhotoSlotLabel(slot: ListingPhotoSlotKey): string {
   if (slot === "front") return "Front";
@@ -914,4 +1355,187 @@ function buildCreateDescriptionPreview(
         previewInput,
       )
     : fallbackDescriptionPreview(previewInput);
+}
+
+// ── Slab-styled form field primitives ─────────────────────
+
+/**
+ * Single labeled text input. Field label sits above the input in
+ * uppercase monospace; input has a sharp ink border, focus pops a
+ * yellow drop-shadow.
+ */
+function SlabField({
+  id,
+  label,
+  type = "text",
+  value,
+  onChange,
+  placeholder,
+  required,
+}: {
+  id: string;
+  label: string;
+  type?: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  required?: boolean;
+}) {
+  return (
+    <div>
+      <label
+        htmlFor={id}
+        style={{
+          display: "block",
+          fontFamily: "var(--font-mono)",
+          fontSize: 10,
+          letterSpacing: 1.5,
+          color: "var(--ink-soft)",
+          marginBottom: 4,
+          fontWeight: 700,
+        }}
+      >
+        {label}
+      </label>
+      <input
+        id={id}
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        required={required}
+        style={{
+          display: "block",
+          width: "100%",
+          padding: "8px 12px",
+          background: "var(--paper)",
+          border: "1.5px solid var(--ink)",
+          fontFamily: "var(--font-mono)",
+          fontSize: 12,
+          color: "var(--ink)",
+          outline: "none",
+          borderRadius: 0,
+          boxSizing: "border-box",
+        }}
+        onFocus={(e) => {
+          e.target.style.boxShadow = "3px 3px 0 var(--accent)";
+        }}
+        onBlur={(e) => {
+          e.target.style.boxShadow = "none";
+        }}
+      />
+    </div>
+  );
+}
+
+/** Wrapper around a non-input field (toggle group, etc.) — gives it the
+ *  same monospace label as SlabField. */
+function SlabFieldGroup({
+  label,
+  children,
+  style,
+}: {
+  label: string;
+  children: ReactNode;
+  style?: CSSProperties;
+}) {
+  return (
+    <div style={style}>
+      <div
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: 10,
+          letterSpacing: 1.5,
+          color: "var(--ink-soft)",
+          marginBottom: 4,
+          fontWeight: 700,
+        }}
+      >
+        {label}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+/** Toggle button — used for Card Type, Condition, Listing Type, etc.
+ *  Active = yellow + ink border, inactive = paper + ink border. */
+function ToggleButton({
+  active,
+  onClick,
+  children,
+  size = "md",
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: ReactNode;
+  size?: "sm" | "md";
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        flex: 1,
+        padding: size === "sm" ? "6px 8px" : "8px 12px",
+        background: active ? "var(--accent)" : "var(--paper)",
+        color: "var(--ink)",
+        border: "1.5px solid var(--ink)",
+        fontFamily: "var(--font-mono)",
+        fontSize: size === "sm" ? 10 : 11,
+        letterSpacing: 1,
+        fontWeight: 700,
+        cursor: "pointer",
+        whiteSpace: "nowrap",
+        boxShadow: active ? "2px 2px 0 var(--ink)" : "none",
+        transition: "box-shadow 0.1s",
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** Pricing/preview summary tile. */
+function SummaryTile({
+  label,
+  value,
+  accent = false,
+}: {
+  label: string;
+  value: string;
+  accent?: boolean;
+}) {
+  return (
+    <div
+      style={{
+        background: accent ? "var(--accent)" : "var(--paper-2)",
+        border: "1.5px solid var(--ink)",
+        padding: 10,
+      }}
+    >
+      <div
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: 9,
+          letterSpacing: 1.5,
+          color: "var(--ink-soft)",
+        }}
+      >
+        {label}
+      </div>
+      <div
+        className="hand"
+        style={{
+          fontSize: 22,
+          fontWeight: 700,
+          lineHeight: 1.1,
+          marginTop: 4,
+          color: "var(--ink)",
+        }}
+      >
+        {value}
+      </div>
+    </div>
+  );
 }
