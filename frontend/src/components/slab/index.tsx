@@ -284,6 +284,194 @@ export function MiniCard({
   );
 }
 
+// ── Form-field primitives ───────────────────────────────────
+
+/**
+ * Single labeled text input. Field label sits above the input in
+ * uppercase monospace; input has a sharp ink border, focus pops a
+ * yellow drop-shadow.
+ */
+export function SlabField({
+  id,
+  label,
+  type = "text",
+  value,
+  onChange,
+  placeholder,
+  required,
+  inputMode,
+  style,
+}: {
+  id: string;
+  label: string;
+  type?: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  required?: boolean;
+  inputMode?: "text" | "decimal" | "numeric" | "email" | "tel" | "url" | "search" | "none";
+  style?: CSSProperties;
+}) {
+  return (
+    <div style={style}>
+      <label
+        htmlFor={id}
+        style={{
+          display: "block",
+          fontFamily: "var(--font-mono)",
+          fontSize: 10,
+          letterSpacing: 1.5,
+          color: "var(--ink-soft)",
+          marginBottom: 4,
+          fontWeight: 700,
+        }}
+      >
+        {label}
+      </label>
+      <input
+        id={id}
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        required={required}
+        inputMode={inputMode}
+        style={{
+          display: "block",
+          width: "100%",
+          padding: "8px 12px",
+          background: "var(--paper)",
+          border: "1.5px solid var(--ink)",
+          fontFamily: "var(--font-mono)",
+          fontSize: 12,
+          color: "var(--ink)",
+          outline: "none",
+          borderRadius: 0,
+          boxSizing: "border-box",
+        }}
+        onFocus={(e) => {
+          e.target.style.boxShadow = "3px 3px 0 var(--accent)";
+        }}
+        onBlur={(e) => {
+          e.target.style.boxShadow = "none";
+        }}
+      />
+    </div>
+  );
+}
+
+/** Wrapper around a non-input field — gives it the same monospace label as SlabField. */
+export function SlabFieldGroup({
+  label,
+  children,
+  style,
+}: {
+  label: string;
+  children: ReactNode;
+  style?: CSSProperties;
+}) {
+  return (
+    <div style={style}>
+      <div
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: 10,
+          letterSpacing: 1.5,
+          color: "var(--ink-soft)",
+          marginBottom: 4,
+          fontWeight: 700,
+        }}
+      >
+        {label}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+/** Slab-styled native <select> for dropdowns. */
+export function SlabSelect({
+  id,
+  value,
+  onChange,
+  options,
+  style,
+}: {
+  id?: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: { value: string; label: string }[];
+  style?: CSSProperties;
+}) {
+  return (
+    <select
+      id={id}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      style={{
+        display: "block",
+        width: "100%",
+        padding: "8px 12px",
+        background: "var(--paper)",
+        border: "1.5px solid var(--ink)",
+        fontFamily: "var(--font-mono)",
+        fontSize: 12,
+        color: "var(--ink)",
+        outline: "none",
+        borderRadius: 0,
+        boxSizing: "border-box",
+        ...style,
+      }}
+    >
+      {options.map((o) => (
+        <option key={o.value} value={o.value}>
+          {o.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+/** Toggle button — yellow when active, paper when not. Used for Card Type, Condition, etc. */
+export function ToggleButton({
+  active,
+  onClick,
+  children,
+  size = "md",
+  flex = true,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: ReactNode;
+  size?: "sm" | "md";
+  /** Stretch to fill the row (default true). Set false for chip-style toggles. */
+  flex?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        flex: flex ? 1 : "none",
+        padding: size === "sm" ? "6px 8px" : "8px 12px",
+        background: active ? "var(--accent)" : "var(--paper)",
+        color: "var(--ink)",
+        border: "1.5px solid var(--ink)",
+        fontFamily: "var(--font-mono)",
+        fontSize: size === "sm" ? 10 : 11,
+        letterSpacing: 1,
+        fontWeight: 700,
+        cursor: "pointer",
+        whiteSpace: "nowrap",
+        boxShadow: active ? "2px 2px 0 var(--ink)" : "none",
+        transition: "box-shadow 0.1s",
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
 // ── Slab button ─────────────────────────────────────────────
 
 export function SlabButton({

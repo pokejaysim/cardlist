@@ -1,11 +1,37 @@
-import { useRef, useState, type ReactNode } from "react";
+/**
+ * Batch Upload — slab/scanner edition.
+ *
+ * Two phases:
+ *   1. Photo collection. User drops a stack of card photos. We pair them
+ *      front/back in upload order. Each pair becomes a slab tile.
+ *   2. Review queue. After "Run Autopilot" creates a batch, each item
+ *      shows as its own slab with status chip, photos, editable fields,
+ *      needs-review reasons, save + select-for-publish controls.
+ *
+ * Business logic preserved 1:1 — every state hook, mutation, and API
+ * call from the previous shadcn version is unchanged.
+ */
+import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { AlertCircle, ArrowLeftRight, CheckCircle2, Loader2, Rocket, Save, Upload, Wand2, X } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import {
+  AlertCircle,
+  ArrowLeftRight,
+  Loader2,
+  Rocket,
+  Save,
+  Upload,
+  Wand2,
+  X,
+} from "lucide-react";
+import {
+  ChipMono,
+  Slab,
+  SlabButton,
+  SlabField,
+  SlabFieldGroup,
+  SlabSelect,
+  ToggleButton,
+} from "@/components/slab";
 import { apiFetch, apiUpload } from "@/lib/api";
 import type {
   BulkPublishResponse,
@@ -43,10 +69,15 @@ export default function BatchUpload() {
   const [error, setError] = useState("");
   const [publishMessage, setPublishMessage] = useState("");
 
+  // ── Upload helpers (preserved) ─────────────────────────────
+
   async function uploadOneFile(file: File): Promise<UploadedPhoto> {
     const formData = new FormData();
     formData.append("photo", file);
-    const response = await apiUpload<{ url?: string; file_url?: string }>("/photos/upload", formData);
+    const response = await apiUpload<{ url?: string; file_url?: string }>(
+      "/photos/upload",
+      formData,
+    );
     const url = response.url ?? response.file_url;
     if (!url) {
       throw new Error("Upload completed but no photo URL was returned.");
@@ -77,7 +108,7 @@ export default function BatchUpload() {
         const front = uploaded[index];
         if (!front) continue;
         newPairs.push({
-          id: `pair-${Date.now()}-${String(index)}`,
+          id: `pair-${String(Date.now())}-${String(index)}`,
           front,
           back: uploaded[index + 1] ?? null,
         });
@@ -135,6 +166,8 @@ export default function BatchUpload() {
     setPairs((current) => current.filter((pair) => pair.id !== pairId));
   }
 
+  // ── Autopilot + review queue (preserved) ───────────────────
+
   async function runAutopilot() {
     const items = pairs.map((pair) => ({
       front_url: pair.front.url,
@@ -154,7 +187,9 @@ export default function BatchUpload() {
       setBatch(createdBatch);
       setSelected(new Set(readyListingIds(createdBatch)));
     } catch (processError) {
-      setError(processError instanceof Error ? processError.message : "Autopilot failed.");
+      setError(
+        processError instanceof Error ? processError.message : "Autopilot failed.",
+      );
     } finally {
       setProcessing(false);
     }
@@ -163,7 +198,10 @@ export default function BatchUpload() {
   async function refreshBatch(batchId: string) {
     const refreshed = await apiFetch<ListingBatchDetail>(`/listing-batches/${batchId}`);
     setBatch(refreshed);
-    setSelected((current) => new Set([...current].filter((id) => readyListingIds(refreshed).includes(id))));
+    setSelected(
+      (current) =>
+        new Set([...current].filter((id) => readyListingIds(refreshed).includes(id))),
+    );
   }
 
   function updateListingInBatch(listingId: string, updates: Partial<Listing>) {
@@ -211,7 +249,9 @@ export default function BatchUpload() {
       });
       updateListingInBatch(listing.id, saved);
 
-      const readiness = await apiFetch<EbayPublishReadiness>(`/listings/${listing.id}/publish-readiness`);
+      const readiness = await apiFetch<EbayPublishReadiness>(
+        `/listings/${listing.id}/publish-readiness`,
+      );
       setBatch((current) => {
         if (!current) return current;
         return {
@@ -266,9 +306,15 @@ export default function BatchUpload() {
         method: "POST",
         body: JSON.stringify({ listing_ids: listingIds, mode: "now" }),
       });
-      const published = response.results.filter((result) => result.status === "published" || result.status === "publishing").length;
-      const blocked = response.results.filter((result) => result.status === "blocked" || result.status === "error").length;
-      setPublishMessage(`${String(published)} listing${published === 1 ? "" : "s"} started publishing. ${String(blocked)} blocked or failed.`);
+      const published = response.results.filter(
+        (result) => result.status === "published" || result.status === "publishing",
+      ).length;
+      const blocked = response.results.filter(
+        (result) => result.status === "blocked" || result.status === "error",
+      ).length;
+      setPublishMessage(
+        `${String(published)} listing${published === 1 ? "" : "s"} started publishing. ${String(blocked)} blocked or failed.`,
+      );
       setSelected(new Set());
       await refreshBatch(batch.id);
     } catch (publishError) {
@@ -280,96 +326,156 @@ export default function BatchUpload() {
 
   const readyIds = batch ? readyListingIds(batch) : [];
   const selectedReadyCount = [...selected].filter((id) => readyIds.includes(id)).length;
+  const missingBackCount = pairs.filter((p) => !p.back).length;
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8">
-      <div className="mb-6">
-        <h1 className="font-heading text-2xl font-bold">Autopilot Draft Queue</h1>
-        <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-          Upload cards as front/back pairs. SnapCard identifies each card, prices it in CAD, creates eBay.ca drafts, and leaves you with a review queue of only the exceptions.
-        </p>
+    <div style={{ padding: "20px 16px 60px", maxWidth: 1280, margin: "0 auto" }}>
+      {/* ── Header ── */}
+      <div className="bu-header">
+        <div>
+          <div
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 11,
+              letterSpacing: 2,
+              color: "var(--ink-soft)",
+            }}
+          >
+            MODULE 03 · PROCESSING QUEUE
+          </div>
+          <div
+            className="hand"
+            style={{
+              fontSize: 36,
+              fontWeight: 700,
+              lineHeight: 1,
+              marginTop: 4,
+            }}
+          >
+            Auction floor.
+          </div>
+          <div
+            style={{
+              fontFamily: "var(--font-marker)",
+              fontSize: 14,
+              color: "var(--ink-soft)",
+              marginTop: 6,
+            }}
+          >
+            Drop a stack — we'll pair fronts/backs and identify each.
+          </div>
+        </div>
+        {!batch && pairs.length > 0 && (
+          <SlabButton primary size="lg" onClick={runAutopilot} disabled={processing || uploading}>
+            {processing ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Wand2 className="size-4" />
+            )}
+            {processing ? `PROCESSING ${String(pairs.length)}…` : `▸ PROCESS ALL ${String(pairs.length)}`}
+          </SlabButton>
+        )}
       </div>
 
+      {/* ── Banners ── */}
       {error && (
-        <div className="mb-4 rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
-          {error}
+        <div
+          style={{
+            marginTop: 14,
+            background: "#c44536",
+            color: "var(--paper)",
+            padding: "8px 12px",
+            fontFamily: "var(--font-mono)",
+            fontSize: 11,
+            letterSpacing: 1,
+            border: "2px solid var(--ink)",
+          }}
+        >
+          ! {error}
         </div>
       )}
-
       {publishMessage && (
-        <div className="mb-4 rounded-lg border border-primary/30 bg-primary/10 p-3 text-sm text-primary">
-          {publishMessage}
+        <div
+          style={{
+            marginTop: 14,
+            background: "var(--accent)",
+            color: "var(--ink)",
+            padding: "8px 12px",
+            fontFamily: "var(--font-mono)",
+            fontSize: 11,
+            letterSpacing: 1,
+            border: "2px solid var(--ink)",
+            fontWeight: 700,
+          }}
+        >
+          ★ {publishMessage}
         </div>
       )}
 
+      {/* ── Phase 1: drop + pairs ── */}
       {!batch && (
-        <>
-          <Card className="mb-5">
-            <CardContent className="py-8">
-              <label
-                onDragOver={(event) => {
-                  event.preventDefault();
-                  setIsDraggingOver(true);
-                }}
-                onDragEnter={(event) => {
-                  event.preventDefault();
-                  setIsDraggingOver(true);
-                }}
-                onDragLeave={() => setIsDraggingOver(false)}
-                onDrop={handleDrop}
-                className={`flex cursor-pointer flex-col items-center gap-3 rounded-xl border-2 border-dashed p-10 transition ${
-                  isDraggingOver
-                    ? "border-primary bg-primary/5"
-                    : "border-muted-foreground/25 hover:border-muted-foreground/50"
-                }`}
-              >
-                {uploading ? (
-                  <Loader2 className="size-10 animate-spin text-muted-foreground" />
-                ) : (
-                  <Upload className={`size-10 ${isDraggingOver ? "text-primary" : "text-muted-foreground"}`} />
-                )}
-                <div className="text-center">
-                  <p className="font-medium">{uploading ? "Uploading..." : "Drop photos here or click to select"}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    File 1 = front, file 2 = back, file 3 = next front, file 4 = next back.
-                  </p>
-                </div>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={handleFilesSelected}
-                  className="hidden"
-                  disabled={uploading}
-                />
-              </label>
-            </CardContent>
-          </Card>
+        <div style={{ marginTop: 18 }}>
+          <DropZone
+            uploading={uploading}
+            isDraggingOver={isDraggingOver}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setIsDraggingOver(true);
+            }}
+            onDragEnter={(e) => {
+              e.preventDefault();
+              setIsDraggingOver(true);
+            }}
+            onDragLeave={() => setIsDraggingOver(false)}
+            onDrop={handleDrop}
+            onChange={handleFilesSelected}
+            inputRef={fileInputRef}
+          />
 
           {pairs.length > 0 && (
-            <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card p-3">
-              <div className="text-sm">
-                <span className="font-medium">{String(pairs.length)} card pair{pairs.length === 1 ? "" : "s"}</span>
-                <span className="ml-2 text-muted-foreground">
-                  {String(pairs.filter((pair) => !pair.back).length)} missing back photo
-                </span>
+            <div
+              style={{
+                marginTop: 16,
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "10px 14px",
+                border: "1.5px solid var(--ink)",
+                background: "var(--paper-2)",
+                flexWrap: "wrap",
+                gap: 8,
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 11,
+                  letterSpacing: 1,
+                }}
+              >
+                <ChipMono solid>{String(pairs.length)} CARD PAIRS</ChipMono>
+                {missingBackCount > 0 && (
+                  <span style={{ color: "var(--ink-soft)" }}>
+                    · {String(missingBackCount)} MISSING BACK
+                  </span>
+                )}
               </div>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
-                  <Upload className="mr-1.5 size-4" />
-                  Add Photos
-                </Button>
-                <Button size="sm" onClick={runAutopilot} disabled={processing || uploading}>
-                  {processing ? <Loader2 className="mr-1.5 size-4 animate-spin" /> : <Wand2 className="mr-1.5 size-4" />}
-                  {processing ? "Creating drafts..." : "Run Autopilot"}
-                </Button>
-              </div>
+              <SlabButton
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+              >
+                <Upload className="size-3" />
+                ADD MORE
+              </SlabButton>
             </div>
           )}
 
           {pairs.length > 0 && (
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div className="bu-pair-grid" style={{ marginTop: 14 }}>
               {pairs.map((pair, index) => (
                 <PhotoPairCard
                   key={pair.id}
@@ -382,45 +488,240 @@ export default function BatchUpload() {
               ))}
             </div>
           )}
-        </>
+        </div>
       )}
 
+      {/* ── Phase 2: review queue ── */}
       {batch && (
-        <div className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card p-4">
-            <div>
-              <p className="font-medium">Batch review queue</p>
-              <p className="text-sm text-muted-foreground">
-                {String(batch.summary_counts.ready)} ready, {String(batch.summary_counts.needs_review)} need review, {String(batch.summary_counts.error)} failed.
-              </p>
+        <div style={{ marginTop: 18 }}>
+          {/* Status header */}
+          <div
+            style={{
+              background: "var(--ink)",
+              color: "var(--paper)",
+              padding: 16,
+              border: "2px solid var(--ink)",
+              position: "relative",
+              overflow: "hidden",
+              display: "flex",
+              alignItems: "center",
+              gap: 16,
+              flexWrap: "wrap",
+            }}
+          >
+            <div
+              className="halftone"
+              style={{ position: "absolute", inset: 0, opacity: 0.06 }}
+            />
+            <div style={{ position: "relative", flex: 1, minWidth: 220 }}>
+              <div
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 10,
+                  letterSpacing: 1.5,
+                  color: "var(--accent)",
+                }}
+              >
+                ● BATCH REVIEW QUEUE
+              </div>
+              <div
+                className="hand"
+                style={{ fontSize: 22, fontWeight: 700, lineHeight: 1.1, marginTop: 4 }}
+              >
+                {String(batch.summary_counts.ready)} ready ·{" "}
+                {String(batch.summary_counts.needs_review)} need review ·{" "}
+                {String(batch.summary_counts.error)} failed
+              </div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <Button variant="outline" onClick={() => void refreshBatch(batch.id)}>
-                Refresh
-              </Button>
-              <Button onClick={publishSelected} disabled={publishing || selectedReadyCount === 0}>
-                {publishing ? <Loader2 className="mr-1.5 size-4 animate-spin" /> : <Rocket className="mr-1.5 size-4" />}
-                Publish {String(selectedReadyCount)} Selected
-              </Button>
+            <div
+              style={{
+                position: "relative",
+                display: "flex",
+                gap: 10,
+                alignItems: "center",
+                flexWrap: "wrap",
+              }}
+            >
+              <SlabButton
+                onClick={() => void refreshBatch(batch.id)}
+                style={{ background: "var(--paper)" }}
+              >
+                REFRESH
+              </SlabButton>
+              <SlabButton
+                primary
+                onClick={publishSelected}
+                disabled={publishing || selectedReadyCount === 0}
+              >
+                {publishing ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Rocket className="size-4" />
+                )}
+                ▸ PUBLISH {String(selectedReadyCount)}
+              </SlabButton>
             </div>
           </div>
 
-          {batch.items.map((item) => (
-            <ReviewQueueItem
-              key={item.id}
-              item={item}
-              selected={Boolean(item.listing?.id && selected.has(item.listing.id))}
-              saving={savingListingId === item.listing?.id}
-              onToggleSelected={() => item.listing?.id && toggleSelected(item.listing.id)}
-              onUpdateListing={updateListingInBatch}
-              onSave={() => void saveListing(item)}
-            />
-          ))}
+          {/* Review items */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 16 }}>
+            {batch.items.map((item) => (
+              <ReviewQueueItem
+                key={item.id}
+                item={item}
+                selected={Boolean(item.listing?.id && selected.has(item.listing.id))}
+                saving={savingListingId === item.listing?.id}
+                onToggleSelected={() => item.listing?.id && toggleSelected(item.listing.id)}
+                onUpdateListing={updateListingInBatch}
+                onSave={() => void saveListing(item)}
+              />
+            ))}
+          </div>
         </div>
       )}
+
+      <style>{`
+        .bu-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-end;
+          gap: 16px;
+          flex-wrap: wrap;
+        }
+        .bu-pair-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+          gap: 14px;
+        }
+        .bu-fields-grid {
+          display: grid;
+          grid-template-columns: repeat(2, 1fr);
+          gap: 10px;
+        }
+        @media (max-width: 600px) {
+          .bu-fields-grid {
+            grid-template-columns: 1fr;
+          }
+        }
+      `}</style>
     </div>
   );
 }
+
+// ── Drop zone (intake bay) ────────────────────────────────────
+
+function DropZone({
+  uploading,
+  isDraggingOver,
+  onDragOver,
+  onDragEnter,
+  onDragLeave,
+  onDrop,
+  onChange,
+  inputRef,
+}: {
+  uploading: boolean;
+  isDraggingOver: boolean;
+  onDragOver: React.DragEventHandler<HTMLLabelElement>;
+  onDragEnter: React.DragEventHandler<HTMLLabelElement>;
+  onDragLeave: React.DragEventHandler<HTMLLabelElement>;
+  onDrop: React.DragEventHandler<HTMLLabelElement>;
+  onChange: React.ChangeEventHandler<HTMLInputElement>;
+  inputRef: React.RefObject<HTMLInputElement | null>;
+}) {
+  return (
+    <label
+      onDragOver={onDragOver}
+      onDragEnter={onDragEnter}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+      style={{
+        display: "block",
+        cursor: "pointer",
+        border: `2px dashed ${isDraggingOver ? "var(--accent)" : "var(--ink)"}`,
+        background: isDraggingOver ? "var(--accent-soft)" : "var(--paper-2)",
+        padding: 36,
+        textAlign: "center",
+        position: "relative",
+        transition: "background 0.15s, border-color 0.15s",
+      }}
+    >
+      <div
+        className="halftone"
+        style={{
+          position: "absolute",
+          inset: 0,
+          opacity: 0.08,
+          pointerEvents: "none",
+        }}
+      />
+      <div style={{ position: "relative" }}>
+        <div
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 11,
+            letterSpacing: 2,
+            color: "var(--ink-soft)",
+            fontWeight: 700,
+          }}
+        >
+          ↓ INTAKE BAY
+        </div>
+        <div
+          className="hand"
+          style={{ fontSize: 28, fontWeight: 700, marginTop: 6, lineHeight: 1 }}
+        >
+          {uploading ? "Uploading…" : "Drop card photos here."}
+        </div>
+        <div
+          style={{
+            fontFamily: "var(--font-marker)",
+            fontSize: 13,
+            color: "var(--ink-soft)",
+            marginTop: 6,
+          }}
+        >
+          File 1 = front, file 2 = back, file 3 = next front… up to 20 pairs.
+        </div>
+        <div
+          style={{
+            display: "flex",
+            gap: 6,
+            justifyContent: "center",
+            marginTop: 14,
+            flexWrap: "wrap",
+          }}
+        >
+          <ChipMono>JPG</ChipMono>
+          <ChipMono>PNG</ChipMono>
+          <ChipMono>HEIC</ChipMono>
+          <ChipMono solid>{`${String(MAX_BATCH_PAIRS)} PAIRS MAX`}</ChipMono>
+        </div>
+        {uploading && (
+          <Loader2
+            className="size-5 animate-spin"
+            style={{
+              color: "var(--ink-soft)",
+              marginTop: 12,
+              display: "inline-block",
+            }}
+          />
+        )}
+      </div>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        onChange={onChange}
+        style={{ display: "none" }}
+        disabled={uploading}
+      />
+    </label>
+  );
+}
+
+// ── Photo pair tile (Phase 1) ────────────────────────────────
 
 function PhotoPairCard({
   pair,
@@ -436,55 +737,170 @@ function PhotoPairCard({
   onAddBack: (file: File | undefined) => void;
 }) {
   return (
-    <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
-      <div className="flex items-center justify-between border-b p-3">
-        <p className="text-sm font-medium">Card {String(position)}</p>
-        <button type="button" onClick={onRemove} className="rounded-full p-1 text-muted-foreground hover:bg-muted">
+    <div
+      style={{
+        background: "var(--paper)",
+        border: "2px solid var(--ink)",
+        boxShadow: "3px 3px 0 var(--ink)",
+        position: "relative",
+      }}
+    >
+      <div
+        style={{
+          background: "var(--ink)",
+          color: "var(--paper)",
+          padding: "6px 12px",
+          fontFamily: "var(--font-mono)",
+          fontSize: 10,
+          letterSpacing: 1.5,
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: 8,
+        }}
+      >
+        <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span
+            style={{
+              background: "var(--accent)",
+              color: "var(--ink)",
+              padding: "1px 6px",
+              fontWeight: 700,
+            }}
+          >
+            {String(position).padStart(2, "0")}
+          </span>
+          <span>CARD PAIR</span>
+        </span>
+        <button
+          type="button"
+          onClick={onRemove}
+          aria-label="Remove pair"
+          style={{
+            background: "transparent",
+            border: "none",
+            color: "var(--paper)",
+            cursor: "pointer",
+            padding: 0,
+            display: "flex",
+            alignItems: "center",
+          }}
+        >
           <X className="size-4" />
         </button>
       </div>
-      <div className="grid grid-cols-2 gap-3 p-3">
-        <PhotoPreview label="Front" url={pair.front.preview_url} />
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: 8,
+          padding: 8,
+        }}
+      >
+        <PhotoTile label="FRONT" url={pair.front.preview_url} />
         {pair.back ? (
-          <PhotoPreview label="Back" url={pair.back.preview_url} />
+          <PhotoTile label="BACK" url={pair.back.preview_url} />
         ) : (
-          <label className="flex aspect-[3/4] cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed text-center text-xs text-muted-foreground hover:bg-muted/50">
-            <Upload className="mb-2 size-5" />
-            Add back photo
+          <label
+            style={{
+              aspectRatio: "5/7",
+              border: "1.5px dashed var(--ink-soft)",
+              background: "var(--paper-2)",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 4,
+              cursor: "pointer",
+              fontFamily: "var(--font-mono)",
+              fontSize: 9,
+              letterSpacing: 1.5,
+              color: "var(--ink-soft)",
+              padding: 8,
+              textAlign: "center",
+            }}
+          >
+            <Upload className="size-4" />
+            ADD BACK
             <input
               type="file"
               accept="image/*"
-              className="hidden"
+              style={{ display: "none" }}
               onChange={(event) => onAddBack(event.target.files?.[0])}
             />
           </label>
         )}
       </div>
-      <div className="flex gap-2 border-t p-3">
-        <Button variant="outline" size="sm" className="flex-1" disabled={!pair.back} onClick={onSwap}>
-          <ArrowLeftRight className="mr-1.5 size-4" />
-          Swap
-        </Button>
+      <div
+        style={{
+          borderTop: "1.5px solid var(--ink)",
+          padding: 8,
+          background: "var(--paper-2)",
+          display: "flex",
+          gap: 6,
+          alignItems: "center",
+        }}
+      >
+        <SlabButton size="sm" onClick={onSwap}>
+          <ArrowLeftRight className="size-3" />
+          SWAP
+        </SlabButton>
         {!pair.back && (
-          <Badge variant="outline" className="self-center border-amber-300 text-amber-700">
-            front only
-          </Badge>
+          <span
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 9,
+              letterSpacing: 1,
+              padding: "3px 6px",
+              background: "#f5a623",
+              color: "var(--ink)",
+              fontWeight: 700,
+              border: "1.5px solid var(--ink)",
+            }}
+          >
+            ? FRONT ONLY
+          </span>
         )}
       </div>
     </div>
   );
 }
 
-function PhotoPreview({ label, url }: { label: string; url: string }) {
+function PhotoTile({ label, url }: { label: string; url: string }) {
   return (
     <div>
-      <div className="aspect-[3/4] overflow-hidden rounded-lg bg-muted">
-        <img src={url} alt={`${label} card`} className="size-full object-cover" />
+      <div
+        style={{
+          aspectRatio: "5/7",
+          background: "var(--paper-2)",
+          border: "1.5px solid var(--ink)",
+          overflow: "hidden",
+        }}
+      >
+        <img
+          src={url}
+          alt={`${label} card`}
+          style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+        />
       </div>
-      <p className="mt-1 text-center text-xs font-medium text-muted-foreground">{label}</p>
+      <div
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: 9,
+          letterSpacing: 1.5,
+          color: "var(--ink-soft)",
+          textAlign: "center",
+          marginTop: 4,
+          fontWeight: 700,
+        }}
+      >
+        {label}
+      </div>
     </div>
   );
 }
+
+// ── Review queue item (Phase 2) ──────────────────────────────
 
 function ReviewQueueItem({
   item,
@@ -502,56 +918,120 @@ function ReviewQueueItem({
   onSave: () => void;
 }) {
   const listing = item.listing;
-  const statusTone =
-    item.status === "ready"
-      ? "border-primary/30 bg-primary/5"
-      : item.status === "needs_review"
-        ? "border-amber-300 bg-amber-50"
-        : item.status === "error"
-          ? "border-destructive/40 bg-destructive/5"
-          : "border-muted bg-muted/20";
+  const status = item.status;
+  const statusInfo = batchItemStatusInfo(status);
 
   return (
-    <div className={`rounded-xl border p-4 ${statusTone}`}>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          {listing && item.status === "ready" && (
-            <input
-              type="checkbox"
-              checked={selected}
-              onChange={onToggleSelected}
-              className="size-4 accent-primary"
-              aria-label="Select listing to publish"
-            />
-          )}
-          <StatusBadge item={item} />
-          {item.confidence_score != null && (
-            <span className="text-xs text-muted-foreground">
-              {String(Math.round(item.confidence_score * 100))}% confidence
-            </span>
+    <Slab
+      yellow={status === "ready"}
+      grade={statusInfo.grade}
+      label={statusInfo.label}
+      cert={
+        item.confidence_score != null
+          ? `${String(Math.round(item.confidence_score * 100))}% MATCH`
+          : statusInfo.cert
+      }
+      foot={
+        listing
+          ? (
+              <>
+                <span>{listing.card_type === "graded" ? "GRADED CARD" : "RAW CARD"}</span>
+                <span>SAVE TO MARK READY</span>
+              </>
+            )
+          : (
+              <>
+                <span>AUTOPILOT FAILED</span>
+                <span>CHECK PHOTOS</span>
+              </>
+            )
+      }
+    >
+      {/* Top action row — selection + buttons */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 10,
+          marginBottom: 14,
+          flexWrap: "wrap",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {listing && status === "ready" && (
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                fontFamily: "var(--font-mono)",
+                fontSize: 10,
+                letterSpacing: 1,
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={selected}
+                onChange={onToggleSelected}
+                style={{
+                  width: 16,
+                  height: 16,
+                  accentColor: "var(--ink)",
+                  cursor: "pointer",
+                }}
+                aria-label="Select listing to publish"
+              />
+              SELECT FOR PUBLISH
+            </label>
           )}
         </div>
         {listing && (
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" asChild>
-              <Link to={`/listings/${listing.id}`}>Open detail</Link>
-            </Button>
-            <Button size="sm" onClick={onSave} disabled={saving}>
-              {saving ? <Loader2 className="mr-1.5 size-4 animate-spin" /> : <Save className="mr-1.5 size-4" />}
-              Save
-            </Button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <Link
+              to={`/listings/${listing.id}`}
+              className="btn sm"
+              style={{ textDecoration: "none" }}
+            >
+              OPEN DETAIL →
+            </Link>
+            <SlabButton primary size="sm" onClick={onSave} disabled={saving}>
+              {saving ? (
+                <Loader2 className="size-3 animate-spin" />
+              ) : (
+                <Save className="size-3" />
+              )}
+              SAVE
+            </SlabButton>
           </div>
         )}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[180px_minmax(0,1fr)]">
-        <div className="grid grid-cols-2 gap-2 lg:grid-cols-1">
-          <PhotoPreview label="Front" url={item.front_photo_url} />
+      {/* Body: photos + form */}
+      <div className="bu-review-body" style={{ display: "grid", gap: 14 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          <PhotoTile label="FRONT" url={item.front_photo_url} />
           {item.back_photo_url ? (
-            <PhotoPreview label="Back" url={item.back_photo_url} />
+            <PhotoTile label="BACK" url={item.back_photo_url} />
           ) : (
-            <div className="flex aspect-[3/4] items-center justify-center rounded-lg border border-dashed bg-background text-center text-xs text-muted-foreground">
-              Missing back
+            <div
+              style={{
+                aspectRatio: "5/7",
+                border: "1.5px dashed var(--ink-soft)",
+                background: "var(--paper-2)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontFamily: "var(--font-mono)",
+                fontSize: 9,
+                letterSpacing: 1.5,
+                color: "var(--ink-soft)",
+                fontWeight: 700,
+              }}
+            >
+              MISSING BACK
             </div>
           )}
         </div>
@@ -559,27 +1039,91 @@ function ReviewQueueItem({
         {listing ? (
           <EditableListingFields listing={listing} onUpdate={onUpdateListing} />
         ) : (
-          <div className="rounded-lg bg-background p-4 text-sm">
-            <p className="font-medium text-destructive">Autopilot could not create this draft</p>
-            <p className="mt-1 text-muted-foreground">{item.error ?? "Unknown error"}</p>
+          <div
+            style={{
+              padding: 14,
+              border: "2px solid #c44536",
+              background: "rgba(196,69,54,0.05)",
+            }}
+          >
+            <div
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 11,
+                letterSpacing: 1,
+                color: "#c44536",
+                fontWeight: 700,
+              }}
+            >
+              ! AUTOPILOT COULD NOT CREATE THIS DRAFT
+            </div>
+            <div
+              style={{
+                fontFamily: "var(--font-marker)",
+                fontSize: 13,
+                color: "var(--ink-soft)",
+                marginTop: 6,
+                lineHeight: 1.5,
+              }}
+            >
+              {item.error ?? "Unknown error"}
+            </div>
           </div>
         )}
       </div>
 
+      {/* Needs review reasons */}
       {item.needs_review_reasons.length > 0 && (
-        <div className="mt-4 rounded-lg border bg-background p-3 text-sm">
-          <div className="mb-2 flex items-center gap-2 font-medium">
-            <AlertCircle className="size-4 text-amber-600" />
-            Needs review before publish
+        <div
+          style={{
+            marginTop: 14,
+            border: "1.5px solid #f5a623",
+            background: "rgba(245,166,35,0.08)",
+            padding: 12,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              fontFamily: "var(--font-mono)",
+              fontSize: 11,
+              letterSpacing: 1,
+              fontWeight: 700,
+              color: "var(--ink)",
+              marginBottom: 6,
+            }}
+          >
+            <AlertCircle className="size-3.5" />
+            ? NEEDS REVIEW BEFORE PUBLISH
           </div>
-          <ul className="space-y-1 text-muted-foreground">
+          <ul
+            style={{
+              margin: 0,
+              padding: "0 0 0 18px",
+              fontFamily: "var(--font-mono)",
+              fontSize: 11,
+              letterSpacing: 0.5,
+              color: "var(--ink-soft)",
+              lineHeight: 1.6,
+            }}
+          >
             {item.needs_review_reasons.map((reason) => (
               <li key={reason}>{reason}</li>
             ))}
           </ul>
         </div>
       )}
-    </div>
+
+      <style>{`
+        @media (min-width: 900px) {
+          .bu-review-body {
+            grid-template-columns: 200px 1fr !important;
+          }
+        }
+      `}</style>
+    </Slab>
   );
 }
 
@@ -593,147 +1137,176 @@ function EditableListingFields({
   const gameAspect = valueAsString(listing.ebay_aspects?.Game) || "Pokemon TCG";
 
   return (
-    <div className="grid gap-3 md:grid-cols-2">
-      <Field label="Card Name">
-        <Input value={listing.card_name} onChange={(event) => onUpdate(listing.id, { card_name: event.target.value })} />
-      </Field>
-      <Field label="Set">
-        <Input value={listing.set_name ?? ""} onChange={(event) => onUpdate(listing.id, { set_name: event.target.value || null })} />
-      </Field>
-      <Field label="Number">
-        <Input value={listing.card_number ?? ""} onChange={(event) => onUpdate(listing.id, { card_number: event.target.value || null })} />
-      </Field>
-      <Field label="Rarity">
-        <Input value={listing.rarity ?? ""} onChange={(event) => onUpdate(listing.id, { rarity: event.target.value || null })} />
-      </Field>
-      <Field label="Type">
-        <select
-          value={listing.card_type}
-          onChange={(event) =>
-            onUpdate(listing.id, {
-              card_type: event.target.value === "graded" ? "graded" : "raw",
-              condition: event.target.value === "graded" ? null : listing.condition ?? "NM",
-              grading_company: event.target.value === "graded" ? listing.grading_company : null,
-              grade: event.target.value === "graded" ? listing.grade : null,
-              cert_number: event.target.value === "graded" ? listing.cert_number : null,
-            })
-          }
-          className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-        >
-          <option value="raw">Raw</option>
-          <option value="graded">Graded</option>
-        </select>
-      </Field>
+    <div className="bu-fields-grid">
+      <SlabField
+        id={`name-${listing.id}`}
+        label="CARD NAME"
+        value={listing.card_name}
+        onChange={(v) => onUpdate(listing.id, { card_name: v })}
+      />
+      <SlabField
+        id={`set-${listing.id}`}
+        label="SET"
+        value={listing.set_name ?? ""}
+        onChange={(v) => onUpdate(listing.id, { set_name: v || null })}
+      />
+      <SlabField
+        id={`number-${listing.id}`}
+        label="NUMBER"
+        value={listing.card_number ?? ""}
+        onChange={(v) => onUpdate(listing.id, { card_number: v || null })}
+      />
+      <SlabField
+        id={`rarity-${listing.id}`}
+        label="RARITY"
+        value={listing.rarity ?? ""}
+        onChange={(v) => onUpdate(listing.id, { rarity: v || null })}
+      />
+
+      <SlabFieldGroup label="CARD TYPE">
+        <div style={{ display: "flex", gap: 6 }}>
+          <ToggleButton
+            active={listing.card_type === "raw"}
+            onClick={() =>
+              onUpdate(listing.id, {
+                card_type: "raw",
+                condition: listing.condition ?? "NM",
+                grading_company: null,
+                grade: null,
+                cert_number: null,
+              })
+            }
+            size="sm"
+          >
+            RAW
+          </ToggleButton>
+          <ToggleButton
+            active={listing.card_type === "graded"}
+            onClick={() =>
+              onUpdate(listing.id, {
+                card_type: "graded",
+                condition: null,
+              })
+            }
+            size="sm"
+          >
+            GRADED
+          </ToggleButton>
+        </div>
+      </SlabFieldGroup>
+
       {listing.card_type === "graded" ? (
         <>
-          <Field label="Grader">
-            <select
+          <SlabFieldGroup label="GRADER">
+            <SlabSelect
               value={listing.grading_company ?? ""}
-              onChange={(event) =>
+              onChange={(v) =>
                 onUpdate(listing.id, {
-                  grading_company: event.target.value
-                    ? (event.target.value as Listing["grading_company"])
-                    : null,
+                  grading_company: v ? (v as Listing["grading_company"]) : null,
                 })
               }
-              className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-            >
-              <option value="">Choose grader</option>
-              {GRADERS.map((grader) => (
-                <option key={grader} value={grader}>{grader}</option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Grade">
-            <Input value={listing.grade ?? ""} onChange={(event) => onUpdate(listing.id, { grade: event.target.value || null })} />
-          </Field>
-          <Field label="Cert #">
-            <Input value={listing.cert_number ?? ""} onChange={(event) => onUpdate(listing.id, { cert_number: event.target.value || null })} />
-          </Field>
+              options={[
+                { value: "", label: "Choose grader" },
+                ...GRADERS.map((g) => ({ value: g, label: g })),
+              ]}
+            />
+          </SlabFieldGroup>
+          <SlabField
+            id={`grade-${listing.id}`}
+            label="GRADE"
+            value={listing.grade ?? ""}
+            onChange={(v) => onUpdate(listing.id, { grade: v || null })}
+          />
+          <SlabField
+            id={`cert-${listing.id}`}
+            label="CERT #"
+            value={listing.cert_number ?? ""}
+            onChange={(v) => onUpdate(listing.id, { cert_number: v || null })}
+          />
         </>
       ) : (
-        <Field label="Condition">
-          <select
-            value={listing.condition ?? "NM"}
-            onChange={(event) => onUpdate(listing.id, { condition: event.target.value as Listing["condition"] })}
-            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-          >
-            {CONDITIONS.map((condition) => (
-              <option key={condition} value={condition}>{condition}</option>
+        <SlabFieldGroup label="CONDITION">
+          <div style={{ display: "flex", gap: 4 }}>
+            {CONDITIONS.map((c) => (
+              <ToggleButton
+                key={c}
+                active={listing.condition === c}
+                onClick={() => onUpdate(listing.id, { condition: c })}
+                size="sm"
+              >
+                {c}
+              </ToggleButton>
             ))}
-          </select>
-        </Field>
+          </div>
+        </SlabFieldGroup>
       )}
-      <Field label="Title">
-        <Input value={listing.title ?? ""} onChange={(event) => onUpdate(listing.id, { title: event.target.value || null })} />
-      </Field>
-      <Field label="Price CAD">
-        <Input
-          inputMode="decimal"
-          value={listing.price_cad ?? ""}
-          onChange={(event) => {
-            const nextPrice = Number(event.target.value);
-            onUpdate(listing.id, {
-              price_cad: event.target.value && Number.isFinite(nextPrice) ? nextPrice : null,
-            });
-          }}
-        />
-      </Field>
-      <Field label="Listing Type">
-        <select
+
+      <SlabField
+        id={`title-${listing.id}`}
+        label="EBAY TITLE"
+        value={listing.title ?? ""}
+        onChange={(v) => onUpdate(listing.id, { title: v || null })}
+        style={{ gridColumn: "1 / -1" }}
+      />
+      <SlabField
+        id={`price-${listing.id}`}
+        label="PRICE CAD"
+        inputMode="decimal"
+        value={listing.price_cad != null ? String(listing.price_cad) : ""}
+        onChange={(v) => {
+          const nextPrice = Number(v);
+          onUpdate(listing.id, {
+            price_cad: v && Number.isFinite(nextPrice) ? nextPrice : null,
+          });
+        }}
+      />
+      <SlabFieldGroup label="LISTING TYPE">
+        <SlabSelect
           value={listing.listing_type}
-          onChange={(event) => onUpdate(listing.id, { listing_type: event.target.value === "auction" ? "auction" : "fixed_price" })}
-          className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-        >
-          <option value="fixed_price">Fixed price</option>
-          <option value="auction">Auction</option>
-        </select>
-      </Field>
-      <Field label="eBay Game">
-        <Input
-          value={gameAspect}
-          onChange={(event) =>
+          onChange={(v) =>
             onUpdate(listing.id, {
-              ebay_aspects: {
-                ...(listing.ebay_aspects ?? {}),
-                Game: event.target.value,
-              },
+              listing_type: v === "auction" ? "auction" : "fixed_price",
             })
           }
+          options={[
+            { value: "fixed_price", label: "Fixed price" },
+            { value: "auction", label: "Auction" },
+          ]}
         />
-      </Field>
+      </SlabFieldGroup>
+      <SlabField
+        id={`game-${listing.id}`}
+        label="EBAY GAME ASPECT"
+        value={gameAspect}
+        onChange={(v) =>
+          onUpdate(listing.id, {
+            ebay_aspects: {
+              ...(listing.ebay_aspects ?? {}),
+              Game: v,
+            },
+          })
+        }
+        style={{ gridColumn: "1 / -1" }}
+      />
     </div>
   );
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="space-y-1.5">
-      <Label className="text-xs">{label}</Label>
-      {children}
-    </div>
-  );
-}
+// ── Helpers ───────────────────────────────────────────────────
 
-function StatusBadge({ item }: { item: ListingBatchItem }) {
-  if (item.status === "ready") {
-    return (
-      <Badge className="gap-1">
-        <CheckCircle2 className="size-3" />
-        Ready
-      </Badge>
-    );
+function batchItemStatusInfo(
+  status: ListingBatchItem["status"],
+): { grade: string; label: string; cert: string } {
+  switch (status) {
+    case "ready":
+      return { grade: "✓", label: "READY TO PUBLISH", cert: "VERIFIED" };
+    case "needs_review":
+      return { grade: "?", label: "NEEDS REVIEW", cert: "FIX BELOW" };
+    case "error":
+      return { grade: "!", label: "AUTOPILOT ERROR", cert: "RETRY" };
+    default:
+      return { grade: "⟳", label: "PROCESSING", cert: "PENDING" };
   }
-
-  if (item.status === "needs_review") {
-    return <Badge variant="outline" className="border-amber-300 text-amber-700">Needs review</Badge>;
-  }
-
-  if (item.status === "error") {
-    return <Badge variant="destructive">Error</Badge>;
-  }
-
-  return <Badge variant="secondary">Processing</Badge>;
 }
 
 function readyListingIds(batch: ListingBatchDetail): string[] {
@@ -747,3 +1320,4 @@ function valueAsString(value: string | string[] | undefined): string {
   if (Array.isArray(value)) return value[0] ?? "";
   return value ?? "";
 }
+

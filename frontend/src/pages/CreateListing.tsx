@@ -10,7 +10,7 @@
  * themselves rebuilt yet — they can be migrated later without touching
  * the wizard's flow.
  */
-import { useState, type CSSProperties, type ReactNode } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -28,7 +28,14 @@ import {
   fallbackDescriptionPreview,
   renderDescriptionTemplatePreview,
 } from "@/lib/descriptionTemplatePreview";
-import { Slab, SlabButton, ChipMono } from "@/components/slab";
+import {
+  ChipMono,
+  Slab,
+  SlabButton,
+  SlabField,
+  SlabFieldGroup,
+  ToggleButton,
+} from "@/components/slab";
 import {
   ArrowLeft,
   Loader2,
@@ -1355,145 +1362,6 @@ function buildCreateDescriptionPreview(
         previewInput,
       )
     : fallbackDescriptionPreview(previewInput);
-}
-
-// ── Slab-styled form field primitives ─────────────────────
-
-/**
- * Single labeled text input. Field label sits above the input in
- * uppercase monospace; input has a sharp ink border, focus pops a
- * yellow drop-shadow.
- */
-function SlabField({
-  id,
-  label,
-  type = "text",
-  value,
-  onChange,
-  placeholder,
-  required,
-}: {
-  id: string;
-  label: string;
-  type?: string;
-  value: string;
-  onChange: (v: string) => void;
-  placeholder?: string;
-  required?: boolean;
-}) {
-  return (
-    <div>
-      <label
-        htmlFor={id}
-        style={{
-          display: "block",
-          fontFamily: "var(--font-mono)",
-          fontSize: 10,
-          letterSpacing: 1.5,
-          color: "var(--ink-soft)",
-          marginBottom: 4,
-          fontWeight: 700,
-        }}
-      >
-        {label}
-      </label>
-      <input
-        id={id}
-        type={type}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        required={required}
-        style={{
-          display: "block",
-          width: "100%",
-          padding: "8px 12px",
-          background: "var(--paper)",
-          border: "1.5px solid var(--ink)",
-          fontFamily: "var(--font-mono)",
-          fontSize: 12,
-          color: "var(--ink)",
-          outline: "none",
-          borderRadius: 0,
-          boxSizing: "border-box",
-        }}
-        onFocus={(e) => {
-          e.target.style.boxShadow = "3px 3px 0 var(--accent)";
-        }}
-        onBlur={(e) => {
-          e.target.style.boxShadow = "none";
-        }}
-      />
-    </div>
-  );
-}
-
-/** Wrapper around a non-input field (toggle group, etc.) — gives it the
- *  same monospace label as SlabField. */
-function SlabFieldGroup({
-  label,
-  children,
-  style,
-}: {
-  label: string;
-  children: ReactNode;
-  style?: CSSProperties;
-}) {
-  return (
-    <div style={style}>
-      <div
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: 10,
-          letterSpacing: 1.5,
-          color: "var(--ink-soft)",
-          marginBottom: 4,
-          fontWeight: 700,
-        }}
-      >
-        {label}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-/** Toggle button — used for Card Type, Condition, Listing Type, etc.
- *  Active = yellow + ink border, inactive = paper + ink border. */
-function ToggleButton({
-  active,
-  onClick,
-  children,
-  size = "md",
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: ReactNode;
-  size?: "sm" | "md";
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        flex: 1,
-        padding: size === "sm" ? "6px 8px" : "8px 12px",
-        background: active ? "var(--accent)" : "var(--paper)",
-        color: "var(--ink)",
-        border: "1.5px solid var(--ink)",
-        fontFamily: "var(--font-mono)",
-        fontSize: size === "sm" ? 10 : 11,
-        letterSpacing: 1,
-        fontWeight: 700,
-        cursor: "pointer",
-        whiteSpace: "nowrap",
-        boxShadow: active ? "2px 2px 0 var(--ink)" : "none",
-        transition: "box-shadow 0.1s",
-      }}
-    >
-      {children}
-    </button>
-  );
 }
 
 /** Pricing/preview summary tile. */
