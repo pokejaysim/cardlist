@@ -1,13 +1,18 @@
+/**
+ * Onboarding — slab/scanner edition.
+ *
+ * 3-step wizard for first-time users: Welcome → Connect eBay (with the
+ * EbayPublishSetupCard nested) → Ready. All business logic preserved
+ * 1:1 — same effect, same eBay status check, same OAuth redirect, same
+ * server-side onboarding completion call.
+ */
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
+  ChipMono,
+  Slab,
+  SlabButton,
+} from "@/components/slab";
 import { apiFetch } from "@/lib/api";
 import { EbayPublishSetupCard } from "@/components/EbayPublishSetupCard";
 import {
@@ -20,6 +25,13 @@ import {
 
 type Step = "welcome" | "ebay" | "ready";
 
+const STEP_ORDER: Step[] = ["welcome", "ebay", "ready"];
+const STEP_LABELS: Record<Step, string> = {
+  welcome: "WELCOME",
+  ebay: "CONNECT EBAY",
+  ready: "READY",
+};
+
 export default function Onboarding() {
   const navigate = useNavigate();
   const [step, setStep] = useState<Step>("welcome");
@@ -28,7 +40,6 @@ export default function Onboarding() {
   const [settingsReady, setSettingsReady] = useState(false);
   const [error, setError] = useState("");
 
-  // Check if returning from eBay OAuth or if eBay is already linked
   useEffect(() => {
     const returnFlag = localStorage.getItem("snapcard_ebay_return");
     if (returnFlag === "onboarding") {
@@ -39,7 +50,6 @@ export default function Onboarding() {
       .then((status) => {
         if (status.linked) {
           setEbayLinked(true);
-          // If returning from OAuth, jump to eBay step to show success
           if (returnFlag === "onboarding") {
             setStep("ebay");
           }
@@ -61,190 +71,445 @@ export default function Onboarding() {
       setError(
         err instanceof Error
           ? err.message
-          : "Failed to connect to eBay. Please try again."
+          : "Failed to connect to eBay. Please try again.",
       );
       setLinking(false);
     }
   }
 
   async function completeOnboarding(destination: string) {
-    // Persist completion both locally and server-side
     localStorage.setItem("snapcard_onboarding_complete", "true");
-
-    // Best-effort server-side persistence (don't block navigation if it fails)
     try {
       await apiFetch("/account/onboarding", {
         method: "PATCH",
         body: JSON.stringify({ onboarding_complete: true }),
       });
     } catch {
-      // Server endpoint may not exist yet — that's OK, localStorage is the fallback
+      // Server endpoint may not exist yet — localStorage is the fallback
     }
-
     navigate(destination);
   }
 
+  const stepIndex = STEP_ORDER.indexOf(step);
+
   return (
-    <div className="flex min-h-screen items-center justify-center px-4">
-      <div className="w-full max-w-md space-y-4">
-        {/* Step indicator */}
-        <div className="flex justify-center gap-2">
-          {(["welcome", "ebay", "ready"] as const).map((s, i) => (
-            <div
-              key={s}
-              className={`h-1.5 w-12 rounded-full transition ${
-                i <= ["welcome", "ebay", "ready"].indexOf(step)
-                  ? "bg-primary"
-                  : "bg-muted"
-              }`}
-            />
-          ))}
+    <div
+      className="slab-theme"
+      style={{
+        minHeight: "100vh",
+        position: "relative",
+      }}
+    >
+      <div
+        className="card-grid-bg"
+        style={{ position: "absolute", inset: 0, opacity: 0.3 }}
+      />
+      <div
+        style={{
+          position: "relative",
+          padding: "32px 16px 60px",
+          maxWidth: 560,
+          margin: "0 auto",
+        }}
+      >
+        {/* Step ticket bar */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "stretch",
+            border: "2px solid var(--ink)",
+            marginBottom: 18,
+            background: "var(--paper)",
+          }}
+        >
+          {STEP_ORDER.map((s, i) => {
+            const done = i < stepIndex;
+            const active = i === stepIndex;
+            return (
+              <div
+                key={s}
+                style={{
+                  flex: 1,
+                  padding: "10px 14px",
+                  background: active
+                    ? "var(--accent)"
+                    : done
+                      ? "var(--ink)"
+                      : "var(--paper)",
+                  color: active
+                    ? "var(--ink)"
+                    : done
+                      ? "var(--paper)"
+                      : "var(--ink-soft)",
+                  borderRight: i < STEP_ORDER.length - 1 ? "1.5px solid var(--ink)" : "none",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 11,
+                  letterSpacing: 1.5,
+                  fontWeight: active || done ? 700 : 500,
+                }}
+              >
+                <span
+                  style={{
+                    background: active
+                      ? "var(--ink)"
+                      : done
+                        ? "var(--accent)"
+                        : "transparent",
+                    color: active
+                      ? "var(--accent)"
+                      : done
+                        ? "var(--ink)"
+                        : "var(--ink-soft)",
+                    padding: "2px 6px",
+                    fontWeight: 700,
+                    border: !active && !done ? "1.5px solid var(--ink-soft)" : "none",
+                  }}
+                >
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                <span>{STEP_LABELS[s]}</span>
+                {done && <span style={{ marginLeft: "auto" }}>✓</span>}
+              </div>
+            );
+          })}
         </div>
 
-        {/* ── Step 1: Welcome ─────────────────────────── */}
+        {/* ── Step 1: Welcome ── */}
         {step === "welcome" && (
-          <Card>
-            <CardHeader className="text-center">
-              <CardTitle className="text-2xl">Welcome to SnapCard</CardTitle>
-              <CardDescription>
-                Let's get you set up to list cards on eBay in minutes.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-3 text-sm">
-                {[
-                  "Upload card photos",
-                  "AI identifies your card (Pro) or enter details manually (Free)",
-                  "Get pricing suggestions from market data",
-                  "Publish to eBay with one click",
-                ].map((text, i) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <CheckCircle2 className="size-4 shrink-0 text-primary" />
-                    <span>{text}</span>
-                  </div>
-                ))}
-              </div>
-              <Button className="w-full" onClick={() => setStep("ebay")}>
-                Get Started
-                <ArrowRight className="ml-1.5 size-4" />
-              </Button>
-            </CardContent>
-          </Card>
+          <Slab
+            yellow
+            label="WELCOME TO SNAPCARD"
+            grade="00"
+            cert="NEW SELLER"
+            foot={
+              <>
+                <span>POKÉMON CARDS · EBAY.CA</span>
+                <span>~5 MIN SETUP</span>
+              </>
+            }
+          >
+            <div
+              className="hand"
+              style={{
+                fontSize: 28,
+                fontWeight: 700,
+                lineHeight: 1.05,
+                marginBottom: 4,
+              }}
+            >
+              Let's get you listing.
+            </div>
+            <div
+              style={{
+                fontFamily: "var(--font-marker)",
+                fontSize: 13,
+                color: "var(--ink-soft)",
+                marginBottom: 16,
+              }}
+            >
+              Snap, identify, price, publish — your card-listing pipeline in
+              under a minute per card.
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {[
+                "Upload card photos.",
+                "Identify with AI or search the Pokémon TCG database.",
+                "Get pricing from real eBay sold comps.",
+                "Publish to eBay.ca with one click.",
+              ].map((text, i) => (
+                <div
+                  key={text}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    padding: "8px 10px",
+                    background: "var(--paper)",
+                    border: "1.5px solid var(--ink)",
+                  }}
+                >
+                  <ChipMono solid>{String(i + 1).padStart(2, "0")}</ChipMono>
+                  <span
+                    style={{
+                      fontFamily: "var(--font-marker)",
+                      fontSize: 13,
+                      color: "var(--ink)",
+                    }}
+                  >
+                    {text}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ marginTop: 18 }}>
+              <SlabButton
+                primary
+                size="lg"
+                onClick={() => setStep("ebay")}
+                style={{ width: "100%" }}
+              >
+                ▸ GET STARTED
+                <ArrowRight className="size-4" />
+              </SlabButton>
+            </div>
+          </Slab>
         )}
 
-        {/* ── Step 2: Link eBay ───────────────────────── */}
+        {/* ── Step 2: Connect eBay ── */}
         {step === "ebay" && (
-          <Card>
-            <CardHeader className="text-center">
-              <CardTitle>Connect Your eBay Account</CardTitle>
-              <CardDescription>
-                SnapCard needs access to create listings on your behalf.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="rounded-lg bg-muted p-4 text-sm text-muted-foreground">
-                <p>
-                  You'll be redirected to eBay to authorize SnapCard. We only
-                  request permission to:
-                </p>
-                <ul className="mt-2 list-disc space-y-1 pl-5">
-                  <li>Create and manage listings</li>
-                  <li>Upload photos</li>
-                  <li>View your seller account info</li>
-                </ul>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <Slab
+              label="CONNECT YOUR EBAY"
+              grade="01"
+              cert="OAUTH HANDSHAKE"
+              foot={
+                <>
+                  <span>READ + WRITE</span>
+                  <span>YOU AUTHORIZE</span>
+                </>
+              }
+            >
+              <div
+                className="hand"
+                style={{ fontSize: 24, fontWeight: 700, lineHeight: 1.05 }}
+              >
+                SnapCard needs to publish on your behalf.
               </div>
+              <div
+                style={{
+                  fontFamily: "var(--font-marker)",
+                  fontSize: 13,
+                  color: "var(--ink-soft)",
+                  marginTop: 4,
+                  marginBottom: 14,
+                  lineHeight: 1.5,
+                }}
+              >
+                You'll be redirected to eBay to authorize SnapCard. We only
+                request permission to:
+              </div>
+
+              <ul
+                style={{
+                  margin: 0,
+                  padding: 0,
+                  listStyle: "none",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 6,
+                }}
+              >
+                {[
+                  "Create and manage listings",
+                  "Upload photos",
+                  "View your seller account info",
+                ].map((permission) => (
+                  <li
+                    key={permission}
+                    style={{
+                      padding: "6px 10px",
+                      background: "var(--paper-2)",
+                      border: "1.5px solid var(--ink)",
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 11,
+                      letterSpacing: 0.5,
+                      color: "var(--ink)",
+                    }}
+                  >
+                    ◆ {permission}
+                  </li>
+                ))}
+              </ul>
 
               {error && (
-                <div className="flex items-start gap-2 rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
-                  <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-                  <span>{error}</span>
+                <div
+                  style={{
+                    marginTop: 14,
+                    background: "#c44536",
+                    color: "var(--paper)",
+                    padding: "8px 12px",
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 11,
+                    letterSpacing: 1,
+                    border: "2px solid var(--ink)",
+                    display: "flex",
+                    gap: 8,
+                    alignItems: "flex-start",
+                  }}
+                >
+                  <AlertTriangle className="size-4 shrink-0" />
+                  <span style={{ flex: 1 }}>! {error}</span>
                 </div>
               )}
 
-              {ebayLinked ? (
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2 rounded-lg bg-primary/10 p-3 text-sm font-medium text-primary">
-                    <CheckCircle2 className="size-4" />
-                    eBay account linked successfully!
-                  </div>
-                  <EbayPublishSetupCard
-                    title="Finish Your eBay Defaults"
-                    description="Pick your shipping, payment, and return defaults once so publish stays fast later."
-                    onStateChange={(state) =>
-                      setSettingsReady(Boolean(state?.readiness.ready))
-                    }
-                  />
-                </div>
-              ) : (
-                <Button
-                  className="w-full"
-                  onClick={linkEbay}
-                  disabled={linking}
-                >
-                  {linking ? (
-                    <Loader2 className="mr-1.5 size-4 animate-spin" />
-                  ) : (
-                    <ExternalLink className="mr-1.5 size-4" />
-                  )}
-                  {linking ? "Redirecting to eBay..." : "Connect eBay Account"}
-                </Button>
-              )}
-
-              <div className="flex gap-2">
-                <Button
-                  variant="ghost"
-                  className="flex-1"
-                  onClick={() => setStep("ready")}
-                >
-                  {settingsReady ? "Skip for now" : "Finish later"}
-                </Button>
-                {ebayLinked && (
-                  <Button className="flex-1" onClick={() => setStep("ready")}>
-                    {settingsReady ? "Continue" : "Continue anyway"}
-                    <ArrowRight className="ml-1.5 size-4" />
-                  </Button>
+              <div style={{ marginTop: 14 }}>
+                {ebayLinked ? (
+                  <ChipMono accent>
+                    <CheckCircle2 className="size-3" />
+                    EBAY ACCOUNT LINKED
+                  </ChipMono>
+                ) : (
+                  <SlabButton
+                    primary
+                    size="lg"
+                    onClick={linkEbay}
+                    disabled={linking}
+                    style={{ width: "100%" }}
+                  >
+                    {linking ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <ExternalLink className="size-4" />
+                    )}
+                    {linking ? "REDIRECTING TO EBAY…" : "▸ CONNECT EBAY ACCOUNT"}
+                  </SlabButton>
                 )}
               </div>
-            </CardContent>
-          </Card>
+            </Slab>
+
+            {ebayLinked && (
+              <EbayPublishSetupCard
+                title="FINISH YOUR EBAY DEFAULTS"
+                description="Pick your shipping, payment, and return defaults once so publish stays fast later."
+                onStateChange={(state) =>
+                  setSettingsReady(Boolean(state?.readiness.ready))
+                }
+              />
+            )}
+
+            <div
+              style={{
+                display: "flex",
+                gap: 8,
+              }}
+            >
+              <SlabButton
+                onClick={() => setStep("ready")}
+                style={{ flex: 1 }}
+              >
+                {settingsReady ? "SKIP FOR NOW" : "FINISH LATER"}
+              </SlabButton>
+              {ebayLinked && (
+                <SlabButton
+                  primary
+                  onClick={() => setStep("ready")}
+                  style={{ flex: 1 }}
+                >
+                  {settingsReady ? "CONTINUE" : "CONTINUE ANYWAY"}
+                  <ArrowRight className="size-4" />
+                </SlabButton>
+              )}
+            </div>
+          </div>
         )}
 
-        {/* ── Step 3: Ready ───────────────────────────── */}
+        {/* ── Step 3: Ready ── */}
         {step === "ready" && (
-          <Card>
-            <CardHeader className="text-center">
-              <CardTitle>You're All Set!</CardTitle>
-              <CardDescription>
-                Here's how SnapCard works.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-3 text-sm text-muted-foreground">
-                <ol className="list-decimal space-y-1 pl-5">
-                  <li>Upload a photo of your card</li>
-                  <li>
-                    Enter card details manually, or let AI identify it (Pro)
-                  </li>
-                  <li>Set your price and review the readiness checklist</li>
-                  <li>Publish to eBay once the checklist is clear</li>
-                </ol>
-              </div>
-              <Button
-                className="w-full"
+          <Slab
+            yellow
+            label="YOU'RE ALL SET"
+            grade="✓"
+            cert="READY TO LIST"
+            foot={
+              <>
+                <span>FIRST 5 ON US</span>
+                <span>NO CARD REQUIRED</span>
+              </>
+            }
+          >
+            <div
+              className="hand"
+              style={{
+                fontSize: 28,
+                fontWeight: 700,
+                lineHeight: 1.05,
+                marginBottom: 4,
+              }}
+            >
+              Here's how it goes.
+            </div>
+            <div
+              style={{
+                fontFamily: "var(--font-marker)",
+                fontSize: 13,
+                color: "var(--ink-soft)",
+                marginBottom: 14,
+              }}
+            >
+              The full SnapCard pipeline, top to bottom.
+            </div>
+
+            <ol
+              style={{
+                margin: 0,
+                padding: 0,
+                listStyle: "none",
+                display: "flex",
+                flexDirection: "column",
+                gap: 6,
+              }}
+            >
+              {[
+                "Snap a photo of your card.",
+                "Search the Pokémon TCG database, AI-identify with Opus, or enter manually.",
+                "Set your price — SnapCard pulls real sold comps to suggest one.",
+                "Publish to eBay once the readiness checklist clears.",
+              ].map((text, i) => (
+                <li
+                  key={text}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    padding: "8px 10px",
+                    background: "var(--paper)",
+                    border: "1.5px solid var(--ink)",
+                  }}
+                >
+                  <ChipMono solid>{String(i + 1).padStart(2, "0")}</ChipMono>
+                  <span
+                    style={{
+                      fontFamily: "var(--font-marker)",
+                      fontSize: 13,
+                      color: "var(--ink)",
+                    }}
+                  >
+                    {text}
+                  </span>
+                </li>
+              ))}
+            </ol>
+
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 8,
+                marginTop: 18,
+              }}
+            >
+              <SlabButton
+                primary
+                size="lg"
                 onClick={() => completeOnboarding("/listings/new")}
+                style={{ width: "100%" }}
               >
-                Create Your First Listing
-                <ArrowRight className="ml-1.5 size-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                className="w-full"
+                ▸ CREATE YOUR FIRST LISTING
+                <ArrowRight className="size-4" />
+              </SlabButton>
+              <SlabButton
                 onClick={() => completeOnboarding("/dashboard")}
+                style={{ width: "100%" }}
               >
-                Go to Dashboard
-              </Button>
-            </CardContent>
-          </Card>
+                GO TO DASHBOARD
+              </SlabButton>
+            </div>
+          </Slab>
         )}
       </div>
     </div>
